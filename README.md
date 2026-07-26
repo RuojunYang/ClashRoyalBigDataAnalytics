@@ -54,4 +54,4 @@ pytest
 | `CLASH_ROYALE_API_KEY` | 官方 API Key |
 | `ADMIN_API_KEY` | Admin 同步端点鉴权 |
 | `SYNC_ON_STARTUP` | 启动时是否立即同步 |
-| `CARD_SYNC_CRON_HOUR` | 每日自动同步（UTC 小时） |
+| `CARD_SYNC_CRON_HOUR` | 每日自动同步（UTC 小时，Docker/服务器内按 UTC 执行） |

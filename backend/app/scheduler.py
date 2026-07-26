@@ -1,4 +1,5 @@
 import logging
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -9,7 +10,8 @@ from app.services.card_sync import CardSyncService
 
 logger = logging.getLogger(__name__)
 
-scheduler = AsyncIOScheduler()
+UTC = ZoneInfo("UTC")
+scheduler = AsyncIOScheduler(timezone=UTC)
 
 
 async def run_scheduled_card_sync() -> None:
@@ -26,7 +28,7 @@ async def run_scheduled_card_sync() -> None:
 def start_scheduler() -> None:
     scheduler.add_job(
         run_scheduled_card_sync,
-        trigger=CronTrigger(hour=settings.card_sync_cron_hour, minute=0),
+        trigger=CronTrigger(hour=settings.card_sync_cron_hour, minute=0, timezone=UTC),
         id="daily_card_sync",
         replace_existing=True,
     )

@@ -47,6 +47,11 @@ class CardSyncService:
             existing_result = await session.execute(select(Card))
             existing_cards = {card.id: card for card in existing_result.scalars().all()}
 
+            if not mapped_cards and any(card.is_active for card in existing_cards.values()):
+                raise ValueError(
+                    "Refusing to sync: API returned zero cards while active cards exist in the database"
+                )
+
             now = datetime.now(UTC)
             created = 0
             updated = 0

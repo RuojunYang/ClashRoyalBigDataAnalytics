@@ -1,12 +1,10 @@
-import uuid
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.db.models import Base, Card, CardChangelog, SyncRun
+from app.db.models import Base, Card, CardChangelog
 from app.services.card_sync import CardSyncService
 
 
@@ -75,8 +73,9 @@ async def test_sync_cards_creates_and_updates(db_session: AsyncSession):
     field_names = {entry.field_name for entry in changelog_entries}
     assert "has_evolution" in field_names or "max_evolution_level" in field_names
 
+
 @pytest.mark.asyncio
-async def test_sync_cards_deactivates_missing_card(db_session: AsyncSession):
+async def test_sync_cards_refuses_empty_api_response_when_cards_exist(db_session: AsyncSession):
     client = AsyncMock()
     client.get_cards = AsyncMock(
         side_effect=[
@@ -87,9 +86,36 @@ async def test_sync_cards_deactivates_missing_card(db_session: AsyncSession):
     service = CardSyncService(client=client)
 
     await service.sync_cards(db_session)
-    result = await service.sync_cards(db_session)
+
+    with pytest.raises(ValueError, match="Refusing to sync"):
+        await service.sync_cards(db_session)
 
     card = await db_session.get(Card, 26000000)
     assert card is not None
-    assert card.is_active is False
+    assert card.is_active is True
+
+
+@pytest.mark.asyncio
+async def test_sync_cards_deactivates_missing_card(db_session: AsyncSession):
+    client = AsyncMock()
+    client.get_cards = AsyncMock(
+        side_effect=[
+            [
+                {"name": "Knight", "id": 26000000, "elixirCost": 3, "iconUrls": {"medium": "x"}},
+                {"name": "Archers", "id": 26000001, "elixirCost": 3, "iconUrls": {"medium": "y"}},
+            ],
+            [{"name": "Archers", "id": 26000001, "elixirCost": 3, "iconUrls": {"medium": "y"}}],
+        ]
+    )
+    service = CardSyncService(client=client)
+
+    await service.sync_cards(db_session)
+    result = await service.sync_cards(db_session)
+
+    knight = await db_session.get(Card, 26000000)
+    archers = await db_session.get(Card, 26000001)
+    assert knight is not None
+    assert knight.is_active is False
+    assert archers is not None
+    assert archers.is_active is True
     assert result.cards_deactivated == 1
