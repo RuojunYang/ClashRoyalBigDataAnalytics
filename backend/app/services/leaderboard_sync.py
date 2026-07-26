@@ -1,7 +1,7 @@
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -22,9 +22,11 @@ class LeaderboardSyncService:
         session: AsyncSession,
         top_n: int | None = None,
         page_limit: int | None = None,
+        untrack_after_misses: int | None = None,
     ) -> LeaderboardSyncResult:
         top_n = top_n or settings.leaderboard_top_n
         page_limit = page_limit or settings.leaderboard_page_limit
+        untrack_after_misses = untrack_after_misses or settings.untrack_after_misses
         now = datetime.now(UTC)
 
         api_entries = await self.client.get_global_pol_players_top_n(top_n, page_limit)
@@ -57,6 +59,7 @@ class LeaderboardSyncService:
                         clan_tag=entry["clan_tag"],
                         clan_name=entry["clan_name"],
                         is_tracked=True,
+                        off_leaderboard_count=0,
                         last_leaderboard_sync_at=now,
                         first_seen_at=now,
                         updated_at=now,
@@ -70,15 +73,19 @@ class LeaderboardSyncService:
                 existing.clan_tag = entry["clan_tag"]
                 existing.clan_name = entry["clan_name"]
                 existing.is_tracked = True
+                existing.off_leaderboard_count = 0
                 existing.last_leaderboard_sync_at = now
                 existing.updated_at = now
 
         if tracked_tags:
-            await session.execute(
-                update(Player)
-                .where(Player.is_tracked.is_(True), Player.tag.notin_(tracked_tags))
-                .values(is_tracked=False, updated_at=now)
-            )
+            tracked_result = await session.execute(select(Player).where(Player.is_tracked.is_(True)))
+            for player in tracked_result.scalars():
+                if player.tag in tracked_tags:
+                    continue
+                player.off_leaderboard_count += 1
+                if player.off_leaderboard_count >= untrack_after_misses:
+                    player.is_tracked = False
+                player.updated_at = now
 
         await session.commit()
 

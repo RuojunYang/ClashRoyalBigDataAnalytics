@@ -55,3 +55,36 @@ pytest
 | `ADMIN_API_KEY` | Admin 同步端点鉴权 |
 | `SYNC_ON_STARTUP` | 启动时是否立即同步 |
 | `CARD_SYNC_CRON_HOUR` | 每日自动同步（UTC 小时，Docker/服务器内按 UTC 执行） |
+
+## Phase 2: 全球 PoL 排行榜 + 对战同步
+
+从 `GET /locations/global/pathoflegend/players` 抓取 top N 玩家 tag，再拉取 battlelog 入库。
+
+### 同步流程
+
+```bash
+# 1. 同步卡牌（若尚未执行）
+curl -X POST http://localhost:8000/api/admin/sync/cards -H "X-Admin-API-Key: change_me_admin_key"
+
+# 2. 同步全球 PoL 排行榜（默认 top 100，可改 top_n）
+curl -X POST "http://localhost:8000/api/admin/sync/leaderboard?top_n=100" -H "X-Admin-API-Key: change_me_admin_key"
+
+# 3. 同步 tracked 玩家 battlelog（默认全部；batch_size 可限制单次处理人数）
+curl -X POST http://localhost:8000/api/admin/sync/battlelog -H "X-Admin-API-Key: change_me_admin_key"
+```
+
+### 查询端点
+
+- `GET /api/players` — tracked 玩家列表
+- `GET /api/players?tracked_only=false` — 含掉榜玩家
+- `GET /api/leaderboard/latest` — 最新排行榜快照
+
+### Phase 2 环境变量
+
+| 变量 | 说明 |
+|------|------|
+| `LEADERBOARD_TOP_N` | 默认跟踪 top N 玩家（默认 100） |
+| `LEADERBOARD_PAGE_LIMIT` | 每次 API 请求的 `limit` 参数（默认 100） |
+| `UNTRACK_AFTER_MISSES` | 连续多少次 sync 不在榜后停止跟踪（默认 3；设为 1 等同立即 untrack） |
+| `SYNC_RANKED_BATTLES_ONLY` | 只入库 pathOfLegend / Ranked1v1 对局 |
+| `BATTLELOG_BATCH_SIZE` | 预留：定时任务批次大小 |

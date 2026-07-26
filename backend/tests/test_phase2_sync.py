@@ -106,11 +106,89 @@ async def test_leaderboard_sync_untracks_dropped_players(db_session: AsyncSessio
         ]
     )
     service = LeaderboardSyncService(client=client)
-    await service.sync_leaderboard(db_session, top_n=1, page_limit=100)
+    await service.sync_leaderboard(db_session, top_n=1, page_limit=100, untrack_after_misses=1)
 
     old_player = await db_session.get(Player, "#OLDPLAYER")
     assert old_player is not None
     assert old_player.is_tracked is False
+    assert old_player.off_leaderboard_count == 1
+
+
+@pytest.mark.asyncio
+async def test_leaderboard_sync_grace_period_before_untrack(db_session: AsyncSession):
+    db_session.add(
+        Player(
+            tag="#OLDPLAYER",
+            name="Old",
+            latest_rank=999,
+            is_tracked=True,
+        )
+    )
+    await db_session.commit()
+
+    client = AsyncMock()
+    client.get_global_pol_players_top_n = AsyncMock(
+        return_value=[
+            {
+                "tag": "#G0CYJ00J",
+                "name": "Nicoco23",
+                "expLevel": 87,
+                "eloRating": 3160,
+                "rank": 1,
+            }
+        ]
+    )
+    service = LeaderboardSyncService(client=client)
+
+    await service.sync_leaderboard(db_session, top_n=1, page_limit=100, untrack_after_misses=3)
+    old_player = await db_session.get(Player, "#OLDPLAYER")
+    assert old_player is not None
+    assert old_player.is_tracked is True
+    assert old_player.off_leaderboard_count == 1
+
+    await service.sync_leaderboard(db_session, top_n=1, page_limit=100, untrack_after_misses=3)
+    await db_session.refresh(old_player)
+    assert old_player.is_tracked is True
+    assert old_player.off_leaderboard_count == 2
+
+    await service.sync_leaderboard(db_session, top_n=1, page_limit=100, untrack_after_misses=3)
+    await db_session.refresh(old_player)
+    assert old_player.is_tracked is False
+    assert old_player.off_leaderboard_count == 3
+
+
+@pytest.mark.asyncio
+async def test_leaderboard_sync_resets_off_leaderboard_count_when_back(db_session: AsyncSession):
+    db_session.add(
+        Player(
+            tag="#G0CYJ00J",
+            name="Nicoco23",
+            latest_rank=2,
+            is_tracked=True,
+            off_leaderboard_count=2,
+        )
+    )
+    await db_session.commit()
+
+    client = AsyncMock()
+    client.get_global_pol_players_top_n = AsyncMock(
+        return_value=[
+            {
+                "tag": "#G0CYJ00J",
+                "name": "Nicoco23",
+                "expLevel": 87,
+                "eloRating": 3160,
+                "rank": 1,
+            }
+        ]
+    )
+    service = LeaderboardSyncService(client=client)
+    await service.sync_leaderboard(db_session, top_n=1, page_limit=100, untrack_after_misses=3)
+
+    player = await db_session.get(Player, "#G0CYJ00J")
+    assert player is not None
+    assert player.is_tracked is True
+    assert player.off_leaderboard_count == 0
 
 
 @pytest.mark.asyncio

@@ -55,6 +55,7 @@ class PlayerResponse(BaseModel):
     clan_tag: str | None
     clan_name: str | None
     is_tracked: bool
+    off_leaderboard_count: int
     last_leaderboard_sync_at: datetime | None
     last_battlelog_sync_at: datetime | None
     first_seen_at: datetime

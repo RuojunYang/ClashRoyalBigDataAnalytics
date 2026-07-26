@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     card_sync_cron_hour: int = 3
     leaderboard_top_n: int = 100
     leaderboard_page_limit: int = 100
+    untrack_after_misses: int = 3
     sync_ranked_battles_only: bool = True
     battlelog_batch_size: int = 10
 
