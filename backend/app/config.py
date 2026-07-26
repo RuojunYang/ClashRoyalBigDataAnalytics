@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     admin_api_key: str = "change_me_admin_key"
     sync_on_startup: bool = False
     card_sync_cron_hour: int = 3
+    leaderboard_top_n: int = 100
+    leaderboard_page_limit: int = 100
+    sync_ranked_battles_only: bool = True
+    battlelog_batch_size: int = 10
 
 
 settings = Settings()

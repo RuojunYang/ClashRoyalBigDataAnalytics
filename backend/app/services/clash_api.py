@@ -1,10 +1,12 @@
 import asyncio
 import logging
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
 
 from app.config import settings
+from app.services.leaderboard_mapper import encode_player_tag
 
 logger = logging.getLogger(__name__)
 
@@ -69,3 +71,38 @@ class ClashRoyaleClient:
         if items is None:
             raise ClashRoyaleAPIError("Unexpected /cards response: missing 'items'")
         return items
+
+    async def get_global_pol_players(self, *, limit: int = 100, after: str | None = None) -> dict[str, Any]:
+        params: dict[str, str | int] = {"limit": limit}
+        if after is not None:
+            params["after"] = after
+        query = urlencode(params)
+        return await self._request("GET", f"/locations/global/pathoflegend/players?{query}")
+
+    async def get_global_pol_players_top_n(self, top_n: int, page_limit: int) -> list[dict[str, Any]]:
+        collected: list[dict[str, Any]] = []
+        after: str | None = None
+
+        while len(collected) < top_n:
+            page_limit = min(page_limit, top_n - len(collected))
+            payload = await self.get_global_pol_players(limit=page_limit, after=after)
+            items = payload.get("items") or []
+            if not items:
+                break
+            collected.extend(items)
+            if len(collected) >= top_n:
+                break
+            paging = payload.get("paging") or {}
+            cursors = paging.get("cursors") or {}
+            after = cursors.get("after")
+            if not after:
+                break
+
+        return collected[:top_n]
+
+    async def get_player_battlelog(self, player_tag: str) -> list[dict[str, Any]]:
+        encoded_tag = encode_player_tag(player_tag)
+        payload = await self._request("GET", f"/players/{encoded_tag}/battlelog")
+        if isinstance(payload, list):
+            return payload
+        raise ClashRoyaleAPIError("Unexpected battlelog response: expected list")
