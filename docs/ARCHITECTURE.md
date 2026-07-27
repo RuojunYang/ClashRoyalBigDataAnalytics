@@ -46,7 +46,7 @@ backend/
     config.py         # Settings from .env
     main.py           # FastAPI app + lifespan
     scheduler.py      # Daily card sync cron
-  alembic/versions/   # DB migrations (001 → 004)
+  alembic/versions/   # DB migrations (001 → 006)
   tests/
   docker-compose.yml  # Postgres + optional backend container
   .env.example
@@ -126,6 +126,31 @@ Round 2: opponents from round-1 battles → fetch their last N battles
 | `002` | `002_phase2_pol_battles.py` | players, leaderboard, battles |
 | `003` | `003_player_off_leaderboard_count.py` | `players.off_leaderboard_count` |
 | `004` | `004_player_leaderboard_seeded.py` | `players.leaderboard_seeded` |
+| `005` | `005_card_gameplay_profiles.py` | `card_gameplay_profiles` (initial; included roles, superseded by `006`) |
+| `006` | `006_simplify_profiles_add_played_variant.py` | Drop `card_threat_roles` / `role_code`; add `battle_deck_cards.played_variant` |
+
+### Phase 2b — Card core profiles & battle variants (`005`, `006`)
+
+| Table / column | Purpose |
+|----------------|---------|
+| `card_gameplay_profiles` | Per-card, per-variant curated metadata (`is_core`, `related_card_id`, `notes`) |
+| `battle_deck_cards.played_variant` | Which form was played in that deck slot: `base` / `hero` / `evo_1` / `evo_2` |
+
+**`is_core` is independent of `cards.card_type`.** Any type can be core — e.g. Goblin Barrel
+(`spell`) is core; Ice Golem (`troop`) is not core.
+
+- L1 `cards.card_type` — official API fact: `troop` / `building` / `spell` (unchanged)
+- L2 `card_gameplay_profiles.variant` — `base` / `hero` / `evo_1` / … per-form core flag
+- L3 `battle_deck_cards.played_variant` — inferred at ingest from deck slot + card facts
+
+**Variant inference** (battlelog sync, `app/services/card_variant.py`):
+
+- Slots in `DECK_EVO_SLOTS` (default `0,2`) + `cards.has_evolution` → `evo_N`
+- Slot `DECK_HERO_SLOT` (default `1`) + `cards.has_hero` → `hero`
+- Otherwise → `base`
+- Optional API `evolutionLevel` on deck card objects overrides evo level when present
+
+Seed data: [`backend/app/data/card_profile_seed.py`](backend/app/data/card_profile_seed.py)
 
 ---
 
@@ -171,6 +196,14 @@ are stored. See `backend/app/services/battle_mapper.py`.
 If the API returns zero cards but active cards exist in DB, sync **refuses** to proceed
 (to avoid mass-deactivation from a bad API response).
 
+### Card core profiles (curated)
+
+- Do **not** add `is_core` to `cards` — use `card_gameplay_profiles` instead
+- `is_core` answers: "In this variant, is this card a deck win condition / primary threat?"
+- **Not limited to troops** — spells (Goblin Barrel), buildings (Tombstone hero form), etc.
+- Maintained manually in seed data; not inferred from API sync
+- Role taxonomy (`card_threat_roles`) was removed — too granular for manual curation at this stage
+
 ---
 
 ## Official Clash Royale API
@@ -210,8 +243,9 @@ Do **not** use these (verified broken or wrong data):
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/health` | Health check |
-| GET | `/api/cards` | List cards (filters: `card_type`, `has_evolution`, `elixir_cost`) |
+| GET | `/api/cards` | List cards (filters: `card_type`, `has_evolution`, `elixir_cost`, `is_core`, `variant`) |
 | GET | `/api/cards/{id}` | Single card |
+| GET | `/api/cards/{id}/profiles` | Card + all gameplay profiles (`is_core` per variant) |
 | GET | `/api/cards/{id}/changelog` | Card change history |
 | GET | `/api/players` | Tracked players (`tracked_only=true` default) |
 | GET | `/api/leaderboard/latest` | Latest PoL snapshot with entries |
@@ -250,6 +284,8 @@ All settings in `backend/.env` (see `.env.example`). Loaded by `app/config.py` v
 | `OPPONENT_EXPANSION_ROUNDS` | `2` | BFS rounds to follow opponents |
 | `SYNC_RANKED_BATTLES_ONLY` | `true` | Filter battlelog battle types |
 | `BATTLELOG_BATCH_SIZE` | `10` | Reserved for future scheduled batches |
+| `DECK_EVO_SLOTS` | `0,2` | Deck slots that map to evolution form when `has_evolution` |
+| `DECK_HERO_SLOT` | `1` | Deck slot that maps to hero form when `has_hero` |
 | `SYNC_ON_STARTUP` | `false` | Run card sync on app start |
 | `CARD_SYNC_CRON_HOUR` | `3` | Daily card sync hour (UTC) |
 
@@ -287,8 +323,9 @@ Avoid running both Docker `backend` and local `uvicorn` on port 8000.
 
 ```bash
 cd backend
-python -m pytest          # 17 tests
+python -m pytest          # 33 tests
 python -m pytest -v tests/test_phase2_sync.py   # leaderboard / battlelog logic
+python -m pytest -v tests/test_card_variant.py  # played_variant slot inference
 ```
 
 Tests use in-memory SQLite; production uses PostgreSQL.
@@ -301,7 +338,7 @@ Tests use in-memory SQLite; production uses PostgreSQL.
 |-------|--------|----------|
 | 1 | Done | Card sync, changelog, daily cron, read API |
 | 2 | Done | PoL leaderboard, battlelog ingest, player tracking, opponent expansion |
-| 2b | Planned | Scheduled leaderboard/battlelog sync, battles read API, deck stats |
+| 2b | In progress | Card core profiles, `played_variant` on deck cards; deck stats API planned |
 | 3 | Planned | Frontend dashboards |
 
 ---
@@ -324,6 +361,7 @@ Tests use in-memory SQLite; production uses PostgreSQL.
 |--------|-----|----------|
 | `cursor/card-sync-backend-0e90` | #1 | Phase 1 |
 | `cursor/pol-leaderboard-phase2-0e90` | #2 | Phase 2 + off_leaderboard_count |
+| `cursor/card-core-profiles-0e90` | #4 | Card core profiles + played_variant inference |
 
 ---
 

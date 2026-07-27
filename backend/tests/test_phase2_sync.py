@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.db.models import Base, Card, LeaderboardEntry, LeaderboardSnapshot, Player
+from app.db.models import Base, Card, LeaderboardEntry, LeaderboardSnapshot, Player, BattleDeckCard
 from app.services.battlelog_sync import BattlelogSyncService
 from app.services.leaderboard_sync import LeaderboardSyncService
 
@@ -22,8 +22,8 @@ async def db_session():
                 id=26000000,
                 name="Knight",
                 elixir_cost=3,
-                max_evolution_level=0,
-                has_evolution=False,
+                max_evolution_level=1,
+                has_evolution=True,
                 has_hero=False,
                 card_type="troop",
             )
@@ -35,7 +35,7 @@ async def db_session():
                 elixir_cost=3,
                 max_evolution_level=0,
                 has_evolution=False,
-                has_hero=False,
+                has_hero=True,
                 card_type="troop",
             )
         )
@@ -246,6 +246,72 @@ async def test_battlelog_sync_creates_battle(db_session: AsyncSession):
     result_again = await service.sync_battlelog(db_session, opponent_expansion_rounds=0)
     assert result_again.battles_skipped == 1
     assert result_again.battles_created == 0
+
+
+@pytest.mark.asyncio
+async def test_battlelog_sync_sets_played_variant_from_deck_slots(db_session: AsyncSession):
+    db_session.add(
+        Player(
+            tag="#G0CYJ00J",
+            name="Nicoco23",
+            latest_rank=1,
+            is_tracked=True,
+            leaderboard_seeded=True,
+        )
+    )
+    await db_session.commit()
+
+    team_cards = [
+        {"id": 26000000, "level": 14},
+        {"id": 26000001, "level": 14},
+        {"id": 26000000, "level": 14},
+        {"id": 26000001, "level": 14},
+        {"id": 26000000, "level": 14},
+        {"id": 26000001, "level": 14},
+        {"id": 26000000, "level": 14},
+        {"id": 26000001, "level": 14},
+    ]
+    battlelog = [
+        {
+            "type": "pathOfLegend",
+            "battleTime": "20250726T120000.000Z",
+            "gameMode": {"id": 72000450, "name": "Ranked1v1_NewArena"},
+            "arena": {"id": 54000016, "name": "Legend Arena"},
+            "team": [
+                {
+                    "tag": "#G0CYJ00J",
+                    "startingTrophies": 3160,
+                    "trophyChange": 25,
+                    "crowns": 3,
+                    "cards": team_cards,
+                }
+            ],
+            "opponent": [
+                {
+                    "tag": "#OPPONENT1",
+                    "startingTrophies": 3150,
+                    "trophyChange": -25,
+                    "crowns": 1,
+                    "cards": [{"id": 26000001, "level": 14}],
+                }
+            ],
+        }
+    ]
+    client = AsyncMock()
+    client.get_player_battlelog = AsyncMock(return_value=battlelog)
+    service = BattlelogSyncService(client=client)
+    await service.sync_battlelog(db_session, opponent_expansion_rounds=0)
+
+    result = await db_session.execute(
+        select(BattleDeckCard).where(
+            BattleDeckCard.player_tag == "#G0CYJ00J",
+            BattleDeckCard.slot.in_([0, 1, 2]),
+        )
+    )
+    deck_cards = {(row.slot, row.played_variant) for row in result.scalars()}
+    assert (0, "evo_1") in deck_cards
+    assert (1, "hero") in deck_cards
+    assert (2, "evo_1") in deck_cards
 
 
 def _make_battle(team_tag: str, opponent_tag: str, battle_time: str = "20250726T120000.000Z") -> dict:
