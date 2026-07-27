@@ -1,8 +1,8 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.data.card_profile_seed import CARD_GAMEPLAY_PROFILES, CARD_THREAT_ROLES
-from app.db.models import Base, Card, CardGameplayProfile, CardThreatRole
+from app.data.card_profile_seed import CARD_GAMEPLAY_PROFILES
+from app.db.models import Base, Card, CardGameplayProfile
 
 
 @pytest.fixture
@@ -53,8 +53,9 @@ async def profile_db():
                 ),
             ]
         )
-        session.add_all([CardThreatRole(**role) for role in CARD_THREAT_ROLES])
-        session.add_all([CardGameplayProfile(**row) for row in CARD_GAMEPLAY_PROFILES if row["card_id"] in {26000003, 26000038, 28000004, 27000009}])
+        session.add_all(
+            [CardGameplayProfile(**row) for row in CARD_GAMEPLAY_PROFILES if row["card_id"] in {26000003, 26000038, 28000004, 27000009}]
+        )
         await session.commit()
         yield session
 
@@ -66,7 +67,6 @@ async def test_spell_can_be_core(profile_db: AsyncSession):
     barrel = await profile_db.get(CardGameplayProfile, (28000004, "base"))
     assert barrel is not None
     assert barrel.is_core is True
-    assert barrel.role_code == "spell_win_condition"
 
     card = await profile_db.get(Card, 28000004)
     assert card is not None
@@ -78,7 +78,6 @@ async def test_troop_support_is_not_core(profile_db: AsyncSession):
     ice_golem = await profile_db.get(CardGameplayProfile, (26000038, "base"))
     assert ice_golem is not None
     assert ice_golem.is_core is False
-    assert ice_golem.role_code == "support_tank"
 
 
 @pytest.mark.asyncio

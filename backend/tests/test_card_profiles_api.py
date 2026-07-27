@@ -2,8 +2,7 @@ from httpx import ASGITransport, AsyncClient
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.data.card_profile_seed import CARD_GAMEPLAY_PROFILES, CARD_THREAT_ROLES
-from app.db.models import Base, Card, CardGameplayProfile, CardThreatRole
+from app.db.models import Base, Card, CardGameplayProfile
 from app.db.session import get_db
 from app.main import app
 
@@ -29,12 +28,10 @@ async def api_client():
                     card_type="spell",
                 )
             )
-            session.add_all([CardThreatRole(**role) for role in CARD_THREAT_ROLES])
             session.add(
                 CardGameplayProfile(
                     card_id=28000004,
                     variant="base",
-                    role_code="spell_win_condition",
                     is_core=True,
                     notes="Goblin Barrel",
                 )
@@ -69,4 +66,4 @@ async def test_get_card_profiles(api_client: AsyncClient):
     assert data["card_type"] == "spell"
     assert len(data["profiles"]) == 1
     assert data["profiles"][0]["is_core"] is True
-    assert data["profiles"][0]["role_code"] == "spell_win_condition"
+    assert data["profiles"][0]["variant"] == "base"

@@ -12,7 +12,7 @@
 |-------|------|------|
 | 1 | ✅ | 卡牌元数据同步、变更历史、定时同步 |
 | 2 | ✅ | 全球 PoL 排行榜、玩家跟踪、battlelog 入库 |
-| 2b | ⏳ | 定时 sync、battles 查询 API、deck 统计 |
+| 2b | ⏳ | 卡牌核心形态（`is_core`）、battlelog 形态推断（`played_variant`）、deck 统计 |
 | 3 | ⏳ | 前端 |
 
 ---
@@ -111,12 +111,14 @@ curl.exe -X POST "http://localhost:8000/api/admin/sync/battlelog?battles_per_pla
 | 接口 | 说明 |
 |------|------|
 | `GET /api/cards` | 卡牌列表 |
+| `GET /api/cards?is_core=true` | 核心卡（与 card_type 无关，如飞桶） |
+| `GET /api/cards/{id}/profiles` | 卡牌各形态核心定义（`is_core`） |
 | `GET /api/cards/{id}` | 单张卡牌 |
 | `GET /api/players` | 当前 tracked 玩家 |
 | `GET /api/players?tracked_only=false` | 含掉榜玩家 |
 | `GET /api/leaderboard/latest` | 最新排行榜快照 |
 
-对战数据已入库（`battles` 等表），**查询 API 尚未实现**，可暂时用 SQL 查看。
+对战数据已入库（`battles`、`battle_deck_cards.played_variant` 等），**查询 API 尚未实现**，可暂时用 SQL 查看。
 
 ---
 
@@ -134,6 +136,8 @@ curl.exe -X POST "http://localhost:8000/api/admin/sync/battlelog?battles_per_pla
 | `UNTRACK_AFTER_MISSES` | 连续几次不在榜后 untrack | `3` |
 | `BATTLES_PER_PLAYER` | 每人每次 sync 入库最近几场 ranked 对局 | `25` |
 | `OPPONENT_EXPANSION_ROUNDS` | 对手扩展 BFS 轮数（0=仅种子玩家） | `2` |
+| `DECK_EVO_SLOTS` | 进化形态 deck 槽位（逗号分隔） | `0,2` |
+| `DECK_HERO_SLOT` | 英雄形态 deck 槽位 | `1` |
 | `SYNC_RANKED_BATTLES_ONLY` | 只入库 PoL / Ranked1v1 | `true` |
 | `SYNC_ON_STARTUP` | 启动时同步卡牌 | `false` |
 | `CARD_SYNC_CRON_HOUR` | 每日卡牌同步（UTC 小时） | `3` |

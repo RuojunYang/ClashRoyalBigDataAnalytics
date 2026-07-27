@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.db.models import Battle, BattleDeckCard, BattleParticipant, Player
+from app.db.models import Battle, BattleDeckCard, BattleParticipant, Card, Player
 from app.schemas.leaderboard import BattlelogSyncResult
 from app.services.battle_mapper import (
     extract_participant_profiles,
@@ -14,6 +14,7 @@ from app.services.battle_mapper import (
     should_include_battle,
 )
 from app.services.clash_api import ClashRoyaleClient
+from app.services.card_variant import infer_played_variant, parse_deck_slot_set
 
 logger = logging.getLogger(__name__)
 
@@ -226,6 +227,19 @@ class BattlelogSyncService:
         session.add(battle)
         await session.flush()
 
+        card_ids: set[int] = set()
+        for participant in mapped["participants"]:
+            for card in participant["cards"]:
+                card_ids.add(card["id"])
+
+        cards_by_id: dict[int, Card] = {}
+        if card_ids:
+            cards_result = await session.execute(select(Card).where(Card.id.in_(card_ids)))
+            cards_by_id = {card.id: card for card in cards_result.scalars()}
+
+        evo_slots = parse_deck_slot_set(settings.deck_evo_slots)
+        hero_slot = settings.deck_hero_slot
+
         for participant in mapped["participants"]:
             session.add(
                 BattleParticipant(
@@ -239,6 +253,14 @@ class BattlelogSyncService:
                 )
             )
             for slot, card in enumerate(participant["cards"]):
+                card_facts = cards_by_id.get(card["id"])
+                played_variant = infer_played_variant(
+                    slot,
+                    card_facts,
+                    evo_slots=evo_slots,
+                    hero_slot=hero_slot,
+                    evolution_level_from_api=card.get("evolutionLevel"),
+                )
                 session.add(
                     BattleDeckCard(
                         battle_id=battle.id,
@@ -246,6 +268,7 @@ class BattlelogSyncService:
                         slot=slot,
                         card_id=card["id"],
                         card_level=card.get("level"),
+                        played_variant=played_variant,
                     )
                 )
                 stats.deck_cards_created += 1

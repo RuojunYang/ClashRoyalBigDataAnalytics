@@ -49,7 +49,7 @@ async def list_cards(
 async def get_card_profiles(card_id: int, db: AsyncSession = Depends(get_db)) -> Card:
     result = await db.execute(
         select(Card)
-        .options(selectinload(Card.gameplay_profiles).selectinload(CardGameplayProfile.role))
+        .options(selectinload(Card.gameplay_profiles))
         .where(Card.id == card_id)
     )
     card = result.scalar_one_or_none()

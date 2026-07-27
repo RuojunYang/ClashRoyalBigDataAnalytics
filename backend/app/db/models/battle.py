@@ -49,7 +49,11 @@ class BattleDeckCard(Base):
     slot: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     card_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("cards.id"), nullable=False)
     card_level: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    played_variant: Mapped[str] = mapped_column(String(16), nullable=False, default="base")
 
     battle: Mapped["Battle"] = relationship(back_populates="deck_cards")
 
-    __table_args__ = (Index("idx_bdc_card", "card_id"),)
+    __table_args__ = (
+        Index("idx_bdc_card", "card_id"),
+        Index("idx_bdc_played_variant", "played_variant"),
+    )

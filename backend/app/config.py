@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     opponent_expansion_rounds: int = 2
     sync_ranked_battles_only: bool = True
     battlelog_batch_size: int = 10
+    deck_evo_slots: str = "0,2"
+    deck_hero_slot: int = 1
 
 
 settings = Settings()
