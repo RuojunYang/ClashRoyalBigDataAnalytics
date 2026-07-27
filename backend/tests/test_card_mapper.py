@@ -48,3 +48,35 @@ def test_map_api_card_detects_hero():
 
     mapped = map_api_card(api_card)
     assert mapped["has_hero"] is True
+
+
+def test_map_api_card_has_evolution_only_from_evolution_medium():
+    api_card = {
+        "name": "Ice Golem",
+        "id": 26000038,
+        "maxEvolutionLevel": 2,
+        "elixirCost": 2,
+        "iconUrls": {
+            "medium": "https://example.com/medium.png",
+            "heroMedium": "https://example.com/hero.png",
+        },
+    }
+
+    mapped = map_api_card(api_card)
+
+    assert mapped["has_evolution"] is False
+    assert mapped["has_hero"] is True
+    assert mapped["max_evolution_level"] == 2
+
+
+def test_map_api_card_max_evolution_level_without_icon_is_not_evo():
+    api_card = {
+        "name": "Some Card",
+        "id": 26000099,
+        "maxEvolutionLevel": 1,
+        "iconUrls": {"medium": "https://example.com/medium.png"},
+    }
+
+    mapped = map_api_card(api_card)
+
+    assert mapped["has_evolution"] is False

@@ -23,8 +23,6 @@ def infer_played_variant(
         level = evolution_level_from_api
         if level is None or level < 1:
             level = 1
-        if card.max_evolution_level and level > card.max_evolution_level:
-            level = card.max_evolution_level
         return f"evo_{level}"
 
     return "base"

@@ -20,7 +20,7 @@ def map_api_card(api_card: dict) -> dict:
         "name": api_card["name"],
         "elixir_cost": api_card.get("elixirCost"),
         "max_evolution_level": max_evolution_level,
-        "has_evolution": "evolutionMedium" in icon_urls or max_evolution_level > 0,
+        "has_evolution": "evolutionMedium" in icon_urls,
         "has_hero": "heroMedium" in icon_urls,
         "card_type": infer_card_type(api_card["id"]),
     }
