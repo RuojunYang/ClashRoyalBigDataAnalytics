@@ -86,8 +86,12 @@ curl -X POST http://localhost:8000/api/admin/sync/cards \
 curl -X POST "http://localhost:8000/api/admin/sync/leaderboard?top_n=100" \
   -H "X-Admin-API-Key: change_me_admin_key"
 
-# 3. 同步 tracked 玩家的 battlelog
+# 3. 同步 battlelog（默认：每人最近 25 场 + 2 轮对手扩展）
 curl -X POST http://localhost:8000/api/admin/sync/battlelog \
+  -H "X-Admin-API-Key: change_me_admin_key"
+
+# 仅种子玩家各 10 场，不做对手扩展
+curl -X POST "http://localhost:8000/api/admin/sync/battlelog?battles_per_player=10&opponent_expansion_rounds=0" \
   -H "X-Admin-API-Key: change_me_admin_key"
 ```
 

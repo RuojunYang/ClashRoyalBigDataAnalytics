@@ -26,6 +26,14 @@ class Card(Base):
     )
 
     changelog_entries: Mapped[list["CardChangelog"]] = relationship(back_populates="card")
+    gameplay_profiles: Mapped[list["CardGameplayProfile"]] = relationship(
+        back_populates="card",
+        foreign_keys="CardGameplayProfile.card_id",
+    )
+
+    @property
+    def profiles(self) -> list["CardGameplayProfile"]:
+        return self.gameplay_profiles
 
     __table_args__ = (
         Index("idx_cards_elixir", "elixir_cost"),

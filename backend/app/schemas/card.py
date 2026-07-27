@@ -56,3 +56,28 @@ class CardSyncResult(BaseModel):
     cards_deactivated: int = 0
     changes_logged: int = 0
     total_active_cards: int = 0
+
+
+class CardThreatRoleResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    code: str
+    label: str
+    description: str | None = None
+
+
+class CardGameplayProfileResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    card_id: int
+    variant: str
+    role_code: str
+    is_core: bool
+    related_card_id: int | None = None
+    notes: str | None = None
+    updated_at: datetime
+    role: CardThreatRoleResponse | None = None
+
+
+class CardWithProfilesResponse(CardResponse):
+    profiles: list[CardGameplayProfileResponse] = Field(default_factory=list)
