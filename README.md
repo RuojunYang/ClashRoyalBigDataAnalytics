@@ -117,6 +117,24 @@ curl.exe -X POST "http://localhost:8000/api/admin/sync/battlelog?battles_per_pla
 | `GET /api/players` | 当前 tracked 玩家 |
 | `GET /api/players?tracked_only=false` | 含掉榜玩家 |
 | `GET /api/leaderboard/latest` | 最新排行榜快照 |
+| `GET /api/data/tables` | 可导出的数据库表清单 |
+| `GET /api/data/{table}` | 导出表数据（JSON / CSV，供 pandas 使用） |
+
+### Pandas 示例
+
+```python
+import pandas as pd
+
+BASE = "http://localhost:8000"
+
+cards = pd.read_json(f"{BASE}/api/data/cards")
+battles = pd.read_json(f"{BASE}/api/data/battles", params={"limit": 50000})
+players = pd.read_csv(f"{BASE}/api/data/players?format=csv")
+deck = pd.read_json(f"{BASE}/api/data/battle_deck_cards", params={"card_id": 26000000})
+```
+
+常用参数：`format=csv`、`limit` / `offset` 分页、`meta=true` 返回带元数据的 JSON。
+表级 filter 见 `GET /api/data/tables`。
 
 对战数据已入库（`battles`、`battle_deck_cards.played_variant` 等），**查询 API 尚未实现**，可暂时用 SQL 查看。
 

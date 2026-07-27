@@ -249,6 +249,8 @@ Do **not** use these (verified broken or wrong data):
 | GET | `/api/cards/{id}/changelog` | Card change history |
 | GET | `/api/players` | Tracked players (`tracked_only=true` default) |
 | GET | `/api/leaderboard/latest` | Latest PoL snapshot with entries |
+| GET | `/api/data/tables` | List exportable DB tables (for pandas) |
+| GET | `/api/data/{table}` | Export table rows as JSON array or CSV |
 
 ### Admin sync (requires `X-Admin-API-Key`)
 
@@ -259,6 +261,41 @@ Do **not** use these (verified broken or wrong data):
 | POST | `/api/admin/sync/battlelog` | `batch_size`, `battles_per_player`, `opponent_expansion_rounds` |
 
 Interactive docs: `http://localhost:8000/docs`
+
+### Pandas export (`/api/data`)
+
+Read any DB table directly into a DataFrame:
+
+```python
+import pandas as pd
+
+BASE = "http://localhost:8000"
+
+# JSON array (default) — one row per record
+cards = pd.read_json(f"{BASE}/api/data/cards")
+battles = pd.read_json(f"{BASE}/api/data/battles", params={"limit": 50000})
+
+# CSV
+players = pd.read_csv(f"{BASE}/api/data/players?format=csv")
+
+# Filters + pagination metadata
+deck = pd.read_json(f"{BASE}/api/data/battle_deck_cards", params={"card_id": 26000000, "meta": True})
+df = pd.DataFrame(deck["rows"])
+```
+
+Query params:
+
+| Param | Default | Meaning |
+|-------|---------|---------|
+| `format` | `json` | `json` or `csv` |
+| `limit` | `10000` | Max rows (up to `100000`) |
+| `offset` | `0` | Skip rows for pagination |
+| `meta` | `false` | When `format=json`, wrap with `{table, count, rows, ...}` |
+| `include_total` | `false` | Include `total_count` (extra COUNT query) |
+
+Supported filters vary by table — see `GET /api/data/tables` for column and filter lists.
+Common examples: `snapshot_id` on `leaderboard_entries`, `player_tag` / `card_id` on `battle_deck_cards`.
+
 
 ### Not yet implemented
 

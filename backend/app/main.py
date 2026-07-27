@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import admin, cards, players
+from app.api import admin, cards, data, players
 from app.config import settings
 from app.db.session import async_session_factory
 from app.scheduler import start_scheduler, stop_scheduler
@@ -34,6 +34,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Clash Royale Big Data Analytics", lifespan=lifespan)
 app.include_router(cards.router)
+app.include_router(data.router)
 app.include_router(admin.router)
 app.include_router(players.router)
 
