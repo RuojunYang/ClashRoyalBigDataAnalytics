@@ -70,3 +70,23 @@ def map_battle_entry(entry: dict) -> dict | None:
             },
         ],
     }
+
+
+def get_opponent_tags(mapped: dict, player_tag: str) -> list[str]:
+    return [p["player_tag"] for p in mapped["participants"] if p["player_tag"] != player_tag]
+
+
+def extract_participant_profiles(entry: dict) -> dict[str, dict]:
+    profiles: dict[str, dict] = {}
+    for side in ("team", "opponent"):
+        participant = (entry.get(side) or [None])[0]
+        if participant is None:
+            continue
+        tag = participant.get("tag")
+        if not tag:
+            continue
+        profiles[tag] = {
+            "name": participant.get("name"),
+            "latest_elo_rating": participant.get("startingTrophies"),
+        }
+    return profiles

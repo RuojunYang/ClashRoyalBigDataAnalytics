@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     leaderboard_top_n: int = 100
     leaderboard_page_limit: int = 100
     untrack_after_misses: int = 3
+    battles_per_player: int = 25
+    opponent_expansion_rounds: int = 2
     sync_ranked_battles_only: bool = True
     battlelog_batch_size: int = 10
 

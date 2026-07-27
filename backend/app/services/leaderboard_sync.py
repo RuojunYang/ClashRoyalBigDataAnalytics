@@ -59,6 +59,7 @@ class LeaderboardSyncService:
                         clan_tag=entry["clan_tag"],
                         clan_name=entry["clan_name"],
                         is_tracked=True,
+                        leaderboard_seeded=True,
                         off_leaderboard_count=0,
                         last_leaderboard_sync_at=now,
                         first_seen_at=now,
@@ -73,12 +74,15 @@ class LeaderboardSyncService:
                 existing.clan_tag = entry["clan_tag"]
                 existing.clan_name = entry["clan_name"]
                 existing.is_tracked = True
+                existing.leaderboard_seeded = True
                 existing.off_leaderboard_count = 0
                 existing.last_leaderboard_sync_at = now
                 existing.updated_at = now
 
         if tracked_tags:
-            tracked_result = await session.execute(select(Player).where(Player.is_tracked.is_(True)))
+            tracked_result = await session.execute(
+                select(Player).where(Player.leaderboard_seeded.is_(True), Player.is_tracked.is_(True))
+            )
             for player in tracked_result.scalars():
                 if player.tag in tracked_tags:
                     continue

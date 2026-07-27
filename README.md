@@ -97,6 +97,7 @@ curl -X POST http://localhost:8000/api/admin/sync/battlelog \
 curl.exe -X POST "http://localhost:8000/api/admin/sync/cards" -H "X-Admin-API-Key: change_me_admin_key"
 curl.exe -X POST "http://localhost:8000/api/admin/sync/leaderboard?top_n=10" -H "X-Admin-API-Key: change_me_admin_key"
 curl.exe -X POST "http://localhost:8000/api/admin/sync/battlelog" -H "X-Admin-API-Key: change_me_admin_key"
+curl.exe -X POST "http://localhost:8000/api/admin/sync/battlelog?battles_per_player=10&opponent_expansion_rounds=0" -H "X-Admin-API-Key: change_me_admin_key"
 ```
 
 ---
@@ -127,6 +128,8 @@ curl.exe -X POST "http://localhost:8000/api/admin/sync/battlelog" -H "X-Admin-AP
 | `LEADERBOARD_TOP_N` | 跟踪 top N 玩家 | `100` |
 | `LEADERBOARD_PAGE_LIMIT` | 排行榜 API 每页条数 | `100` |
 | `UNTRACK_AFTER_MISSES` | 连续几次不在榜后 untrack | `3` |
+| `BATTLES_PER_PLAYER` | 每人每次 sync 入库最近几场 ranked 对局 | `25` |
+| `OPPONENT_EXPANSION_ROUNDS` | 对手扩展 BFS 轮数（0=仅种子玩家） | `2` |
 | `SYNC_RANKED_BATTLES_ONLY` | 只入库 PoL / Ranked1v1 | `true` |
 | `SYNC_ON_STARTUP` | 启动时同步卡牌 | `false` |
 | `CARD_SYNC_CRON_HOUR` | 每日卡牌同步（UTC 小时） | `3` |
