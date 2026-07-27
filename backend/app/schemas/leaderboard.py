@@ -16,6 +16,9 @@ class BattlelogSyncResult(BaseModel):
     battles_skipped: int
     deck_cards_created: int
     total_tracked: int
+    opponents_discovered: int = 0
+    expansion_rounds_run: int = 0
+    battles_per_player: int = 0
 
 
 class LeaderboardEntryResponse(BaseModel):
@@ -55,6 +58,7 @@ class PlayerResponse(BaseModel):
     clan_tag: str | None
     clan_name: str | None
     is_tracked: bool
+    leaderboard_seeded: bool
     off_leaderboard_count: int
     last_leaderboard_sync_at: datetime | None
     last_battlelog_sync_at: datetime | None

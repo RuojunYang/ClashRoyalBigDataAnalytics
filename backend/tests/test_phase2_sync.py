@@ -89,6 +89,7 @@ async def test_leaderboard_sync_untracks_dropped_players(db_session: AsyncSessio
             name="Old",
             latest_rank=999,
             is_tracked=True,
+            leaderboard_seeded=True,
         )
     )
     await db_session.commit()
@@ -122,6 +123,7 @@ async def test_leaderboard_sync_grace_period_before_untrack(db_session: AsyncSes
             name="Old",
             latest_rank=999,
             is_tracked=True,
+            leaderboard_seeded=True,
         )
     )
     await db_session.commit()
@@ -199,6 +201,7 @@ async def test_battlelog_sync_creates_battle(db_session: AsyncSession):
             name="Nicoco23",
             latest_rank=1,
             is_tracked=True,
+            leaderboard_seeded=True,
         )
     )
     await db_session.commit()
@@ -236,10 +239,153 @@ async def test_battlelog_sync_creates_battle(db_session: AsyncSession):
     client.get_player_battlelog = AsyncMock(return_value=battlelog)
     service = BattlelogSyncService(client=client)
 
-    result = await service.sync_battlelog(db_session)
+    result = await service.sync_battlelog(db_session, opponent_expansion_rounds=0)
     assert result.battles_created == 1
     assert result.deck_cards_created == 3
 
-    result_again = await service.sync_battlelog(db_session)
+    result_again = await service.sync_battlelog(db_session, opponent_expansion_rounds=0)
     assert result_again.battles_skipped == 1
     assert result_again.battles_created == 0
+
+
+def _make_battle(team_tag: str, opponent_tag: str, battle_time: str = "20250726T120000.000Z") -> dict:
+    return {
+        "type": "pathOfLegend",
+        "battleTime": battle_time,
+        "gameMode": {"id": 72000450, "name": "Ranked1v1_NewArena"},
+        "arena": {"id": 54000016, "name": "Legend Arena"},
+        "team": [
+            {
+                "tag": team_tag,
+                "name": team_tag,
+                "startingTrophies": 3000,
+                "trophyChange": 25,
+                "crowns": 3,
+                "cards": [{"id": 26000000, "level": 14}],
+            }
+        ],
+        "opponent": [
+            {
+                "tag": opponent_tag,
+                "name": opponent_tag,
+                "startingTrophies": 2950,
+                "trophyChange": -25,
+                "crowns": 1,
+                "cards": [{"id": 26000001, "level": 14}],
+            }
+        ],
+    }
+
+
+@pytest.mark.asyncio
+async def test_battlelog_respects_battles_per_player(db_session: AsyncSession):
+    db_session.add(
+        Player(
+            tag="#SEED",
+            name="Seed",
+            latest_rank=1,
+            is_tracked=True,
+            leaderboard_seeded=True,
+        )
+    )
+    await db_session.commit()
+
+    battlelog = [
+        _make_battle("#SEED", "#OPP1", "20250726T120000.000Z"),
+        _make_battle("#SEED", "#OPP2", "20250726T130000.000Z"),
+        _make_battle("#SEED", "#OPP3", "20250726T140000.000Z"),
+    ]
+    client = AsyncMock()
+    client.get_player_battlelog = AsyncMock(return_value=battlelog)
+    service = BattlelogSyncService(client=client)
+
+    result = await service.sync_battlelog(
+        db_session,
+        battles_per_player=1,
+        opponent_expansion_rounds=0,
+    )
+    assert result.battles_created == 1
+    assert result.players_processed == 1
+
+
+@pytest.mark.asyncio
+async def test_battlelog_opponent_expansion_rounds(db_session: AsyncSession):
+    db_session.add(
+        Player(
+            tag="#SEED",
+            name="Seed",
+            latest_rank=1,
+            is_tracked=True,
+            leaderboard_seeded=True,
+        )
+    )
+    await db_session.commit()
+
+    async def get_battlelog(tag: str) -> list[dict]:
+        if tag == "#SEED":
+            return [_make_battle("#SEED", "#OPP1")]
+        if tag == "#OPP1":
+            return [_make_battle("#OPP1", "#OPP2")]
+        if tag == "#OPP2":
+            return [_make_battle("#OPP2", "#OPP3")]
+        return []
+
+    client = AsyncMock()
+    client.get_player_battlelog = AsyncMock(side_effect=get_battlelog)
+    service = BattlelogSyncService(client=client)
+
+    result = await service.sync_battlelog(
+        db_session,
+        opponent_expansion_rounds=2,
+        battles_per_player=25,
+    )
+    assert result.players_processed == 3
+    assert result.battles_created == 3
+    assert result.opponents_discovered == 3
+
+    opp2 = await db_session.get(Player, "#OPP2")
+    assert opp2 is not None
+    assert opp2.leaderboard_seeded is False
+    assert opp2.is_tracked is False
+
+
+@pytest.mark.asyncio
+async def test_leaderboard_untrack_skips_expansion_players(db_session: AsyncSession):
+    db_session.add(
+        Player(
+            tag="#EXPANSION",
+            name="FromExpansion",
+            is_tracked=False,
+            leaderboard_seeded=False,
+        )
+    )
+    db_session.add(
+        Player(
+            tag="#OLDPLAYER",
+            name="Old",
+            latest_rank=999,
+            is_tracked=True,
+            leaderboard_seeded=True,
+        )
+    )
+    await db_session.commit()
+
+    client = AsyncMock()
+    client.get_global_pol_players_top_n = AsyncMock(
+        return_value=[
+            {
+                "tag": "#G0CYJ00J",
+                "name": "Nicoco23",
+                "expLevel": 87,
+                "eloRating": 3160,
+                "rank": 1,
+            }
+        ]
+    )
+    service = LeaderboardSyncService(client=client)
+    await service.sync_leaderboard(db_session, top_n=1, page_limit=100, untrack_after_misses=1)
+
+    expansion = await db_session.get(Player, "#EXPANSION")
+    assert expansion is not None
+    assert expansion.off_leaderboard_count == 0
+    assert expansion.is_tracked is False

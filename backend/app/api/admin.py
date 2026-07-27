@@ -35,7 +35,14 @@ async def sync_leaderboard(
 @router.post("/sync/battlelog", response_model=BattlelogSyncResult, dependencies=[Depends(verify_admin_api_key)])
 async def sync_battlelog(
     batch_size: int | None = Query(default=None, ge=0, le=1000),
+    battles_per_player: int | None = Query(default=None, ge=1, le=100),
+    opponent_expansion_rounds: int | None = Query(default=None, ge=0, le=10),
     db: AsyncSession = Depends(get_db),
 ) -> BattlelogSyncResult:
     service = BattlelogSyncService()
-    return await service.sync_battlelog(db, batch_size=batch_size)
+    return await service.sync_battlelog(
+        db,
+        batch_size=batch_size,
+        battles_per_player=battles_per_player,
+        opponent_expansion_rounds=opponent_expansion_rounds,
+    )

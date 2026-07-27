@@ -46,7 +46,7 @@ backend/
     config.py         # Settings from .env
     main.py           # FastAPI app + lifespan
     scheduler.py      # Daily card sync cron
-  alembic/versions/   # DB migrations (001 → 003)
+  alembic/versions/   # DB migrations (001 → 004)
   tests/
   docker-compose.yml  # Postgres + optional backend container
   .env.example
@@ -71,10 +71,29 @@ GET /players/{tag}/battlelog →  battles, battle_participants,
 
 1. **Cards** — needed first (`battle_deck_cards.card_id` FK → `cards.id`)
 2. **Leaderboard** — upserts tracked players from global PoL top N
-3. **Battlelog** — pulls battlelog for all `is_tracked=true` players
+3. **Battlelog** — BFS from leaderboard seeds: each player's last N ranked battles,
+   then optional opponent expansion rounds (see below)
 
 Admin endpoints require header `X-Admin-API-Key` matching `.env` `ADMIN_API_KEY`.
 Clash Royale API key is read from `.env` automatically; never pass it in HTTP requests.
+
+### Battlelog expansion (BFS)
+
+Configurable via `BATTLES_PER_PLAYER` and `OPPONENT_EXPANSION_ROUNDS`:
+
+```
+Round 0: top-N leaderboard seeds (is_tracked + leaderboard_seeded)
+         → fetch each seed's last N ranked battles
+Round 1: opponents from round-0 battles → fetch their last N battles
+Round 2: opponents from round-1 battles → fetch their last N battles
+...
+```
+
+- Seeds come from leaderboard sync (`leaderboard_seeded=true`, `is_tracked=true`)
+- Discovered opponents are upserted to `players` with `leaderboard_seeded=false`
+  (not subject to leaderboard untrack logic; not re-synced on future runs unless
+  encountered again via expansion)
+- Set `OPPONENT_EXPANSION_ROUNDS=0` to only sync seed players' battles
 
 ---
 
@@ -106,6 +125,7 @@ Clash Royale API key is read from `.env` automatically; never pass it in HTTP re
 | `001` | `001_initial_schema.py` | cards, card_changelog, sync_runs |
 | `002` | `002_phase2_pol_battles.py` | players, leaderboard, battles |
 | `003` | `003_player_off_leaderboard_count.py` | `players.off_leaderboard_count` |
+| `004` | `004_player_leaderboard_seeded.py` | `players.leaderboard_seeded` |
 
 ---
 
@@ -113,12 +133,20 @@ Clash Royale API key is read from `.env` automatically; never pass it in HTTP re
 
 ### Player tracking (soft untrack)
 
-- `players.is_tracked` — whether to include player in battlelog sync
+- `players.is_tracked` — whether player is in the leaderboard tracking pool
+- `players.leaderboard_seeded` — `true` for top-N players from leaderboard sync;
+  only these are subject to off-board untrack logic
 - `players.off_leaderboard_count` — consecutive syncs absent from top N
-- On leaderboard: count resets to `0`, `is_tracked = true`
-- Off leaderboard: count `+1`; when count ≥ `UNTRACK_AFTER_MISSES` (default 3), `is_tracked = false`
+- On leaderboard: count resets to `0`, `is_tracked = true`, `leaderboard_seeded = true`
+- Off leaderboard (seeded only): count `+1`; when count ≥ `UNTRACK_AFTER_MISSES`, `is_tracked = false`
+- Expansion-discovered opponents: `leaderboard_seeded=false`, `is_tracked=false`
 - **Never delete** player rows or historical battles when someone drops off the board
 - Set `UNTRACK_AFTER_MISSES=1` to restore immediate untrack behavior
+
+### Battlelog per-player limit & expansion
+
+- `BATTLES_PER_PLAYER` — max ranked battles to ingest per player per sync (default 25)
+- `OPPONENT_EXPANSION_ROUNDS` — extra BFS rounds to follow opponents (default 2)
 
 ### Leaderboard snapshots
 
@@ -194,7 +222,7 @@ Do **not** use these (verified broken or wrong data):
 |--------|------|--------------|
 | POST | `/api/admin/sync/cards` | — |
 | POST | `/api/admin/sync/leaderboard` | `top_n` (optional) |
-| POST | `/api/admin/sync/battlelog` | `batch_size` (optional, 0 = all tracked) |
+| POST | `/api/admin/sync/battlelog` | `batch_size`, `battles_per_player`, `opponent_expansion_rounds` |
 
 Interactive docs: `http://localhost:8000/docs`
 
@@ -218,6 +246,8 @@ All settings in `backend/.env` (see `.env.example`). Loaded by `app/config.py` v
 | `LEADERBOARD_TOP_N` | `100` | Default top N players to track |
 | `LEADERBOARD_PAGE_LIMIT` | `100` | Page size for leaderboard API pagination |
 | `UNTRACK_AFTER_MISSES` | `3` | Syncs off-board before untrack |
+| `BATTLES_PER_PLAYER` | `25` | Ranked battles per player per sync |
+| `OPPONENT_EXPANSION_ROUNDS` | `2` | BFS rounds to follow opponents |
 | `SYNC_RANKED_BATTLES_ONLY` | `true` | Filter battlelog battle types |
 | `BATTLELOG_BATCH_SIZE` | `10` | Reserved for future scheduled batches |
 | `SYNC_ON_STARTUP` | `false` | Run card sync on app start |
@@ -270,7 +300,7 @@ Tests use in-memory SQLite; production uses PostgreSQL.
 | Phase | Status | Contents |
 |-------|--------|----------|
 | 1 | Done | Card sync, changelog, daily cron, read API |
-| 2 | Done | PoL leaderboard, battlelog ingest, player tracking |
+| 2 | Done | PoL leaderboard, battlelog ingest, player tracking, opponent expansion |
 | 2b | Planned | Scheduled leaderboard/battlelog sync, battles read API, deck stats |
 | 3 | Planned | Frontend dashboards |
 
