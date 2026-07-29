@@ -115,8 +115,9 @@ Round 2: opponents from round-1 battles → fetch their last N battles
 | `leaderboard_snapshots` | One row per leaderboard sync (historical) |
 | `leaderboard_entries` | Rank/elo per player per snapshot |
 | `battles` | Unique ranked battles (dedupe key: `battle_key`) |
-| `battle_participants` | Team/opponent per battle |
-| `battle_deck_cards` | 8-card deck per player per battle |
+| `battle_participants` | Team/opponent per battle; includes `tower_card_id` (Tower Troop choice) and `won` |
+| `battle_deck_cards` | 8-card deck per player per battle (`card_id`, `played_variant`; no `card_level`) |
+| `tower_troops` | Manual reference catalog for Tower Troops (4 rows; not from `/cards` API) |
 
 ### Migrations
 
@@ -128,6 +129,20 @@ Round 2: opponents from round-1 battles → fetch their last N battles
 | `004` | `004_player_leaderboard_seeded.py` | `players.leaderboard_seeded` |
 | `005` | `005_card_gameplay_profiles.py` | `card_gameplay_profiles` (initial; included roles, superseded by `006`) |
 | `006` | `006_simplify_profiles_add_played_variant.py` | Drop `card_threat_roles` / `role_code`; add `battle_deck_cards.played_variant` |
+| `007` | `007_tower_troop_drop_card_level.py` | Add `tower_troops`; `battle_participants.tower_card_id` FK; drop `battle_deck_cards.card_level` |
+
+### Tower Troops (`007`)
+
+Battlelog `supportCards[]` holds the player's **Tower Troop** (king tower type). One per participant per battle.
+
+| id | name |
+|----|------|
+| 159000000 | Tower Princess |
+| 159000001 | Cannoneer |
+| 159000002 | Dagger Duchess |
+| 159000004 | Royal Chef |
+
+Seeded manually in migration / [`backend/app/data/tower_troop_seed.py`](backend/app/data/tower_troop_seed.py). Not synced from `/cards`. Unknown API ids are logged and stored as `NULL` until a row is added.
 
 ### Phase 2b — Card core profiles & battle variants (`005`, `006`)
 
@@ -142,6 +157,7 @@ Round 2: opponents from round-1 battles → fetch their last N battles
 - L1 `cards.card_type` — official API fact: `troop` / `building` / `spell` (unchanged)
 - L2 `card_gameplay_profiles.variant` — `base` / `hero` / `evo_1` / … per-form core flag
 - L3 `battle_deck_cards.played_variant` — from battlelog deck card `evolutionLevel` (1=evo, 2=hero)
+- L3 `battle_participants.tower_card_id` — from battlelog `supportCards[0].id`
 
 **Variant inference** (battlelog sync, `app/services/card_variant.py`):
 
@@ -286,6 +302,12 @@ players = pd.read_csv(f"{BASE}/api/data/players?format=csv")
 # Filters + pagination metadata
 deck = pd.read_json(f"{BASE}/api/data/battle_deck_cards", params={"card_id": 26000000, "meta": True})
 df = pd.DataFrame(deck["rows"])
+
+# Tower Troop pick rate / win rate
+participants = pd.read_json(f"{BASE}/api/data/battle_participants")
+towers = pd.read_json(f"{BASE}/api/data/tower_troops")
+tower_stats = participants.merge(towers, left_on="tower_card_id", right_on="id", how="left")
+tower_stats.groupby("name")["won"].agg(["count", "mean"])
 ```
 
 Query params:
@@ -299,7 +321,7 @@ Query params:
 | `include_total` | `false` | Include `total_count` (extra COUNT query) |
 
 Supported filters vary by table — see `GET /api/data/tables` for column and filter lists.
-Common examples: `snapshot_id` on `leaderboard_entries`, `player_tag` / `card_id` on `battle_deck_cards`.
+Common examples: `snapshot_id` on `leaderboard_entries`, `player_tag` / `card_id` on `battle_deck_cards`, `tower_card_id` on `battle_participants`.
 
 
 ### Not yet implemented

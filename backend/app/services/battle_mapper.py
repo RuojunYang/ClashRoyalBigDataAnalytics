@@ -12,6 +12,13 @@ def build_battle_key(battle_time: datetime, tag_a: str, tag_b: str) -> str:
     return f"{battle_time.isoformat()}_{sorted_tags[0]}_{sorted_tags[1]}"
 
 
+def extract_tower_card_id(participant: dict) -> int | None:
+    support = participant.get("supportCards") or []
+    if not support:
+        return None
+    return support[0].get("id")
+
+
 def should_include_battle(entry: dict, ranked_only: bool) -> bool:
     if not ranked_only:
         return True
@@ -57,6 +64,7 @@ def map_battle_entry(entry: dict) -> dict | None:
                 "trophy_change": team.get("trophyChange"),
                 "crowns": team_crowns,
                 "won": team_crowns > opponent_crowns,
+                "tower_card_id": extract_tower_card_id(team),
                 "cards": team.get("cards") or [],
             },
             {
@@ -66,6 +74,7 @@ def map_battle_entry(entry: dict) -> dict | None:
                 "trophy_change": opponent.get("trophyChange"),
                 "crowns": opponent_crowns,
                 "won": opponent_crowns > team_crowns,
+                "tower_card_id": extract_tower_card_id(opponent),
                 "cards": opponent.get("cards") or [],
             },
         ],

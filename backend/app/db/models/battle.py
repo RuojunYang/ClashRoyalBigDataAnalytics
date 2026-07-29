@@ -1,9 +1,13 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, SmallInteger, String, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, SmallInteger, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.models.base import Base
+
+if TYPE_CHECKING:
+    from app.db.models.tower_troop import TowerTroop
 
 
 class Battle(Base):
@@ -35,10 +39,16 @@ class BattleParticipant(Base):
     trophy_change: Mapped[int | None] = mapped_column(Integer, nullable=True)
     crowns: Mapped[int | None] = mapped_column(Integer, nullable=True)
     won: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    tower_card_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("tower_troops.id"), nullable=True)
 
     battle: Mapped["Battle"] = relationship(back_populates="participants")
+    tower_troop: Mapped["TowerTroop | None"] = relationship(back_populates="participants")
 
-    __table_args__ = (Index("idx_bp_battle", "battle_id"), Index("idx_bp_player", "player_tag"),)
+    __table_args__ = (
+        Index("idx_bp_battle", "battle_id"),
+        Index("idx_bp_player", "player_tag"),
+        Index("idx_bp_tower_card", "tower_card_id"),
+    )
 
 
 class BattleDeckCard(Base):
@@ -48,7 +58,6 @@ class BattleDeckCard(Base):
     player_tag: Mapped[str] = mapped_column(String(16), primary_key=True)
     slot: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     card_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("cards.id"), nullable=False)
-    card_level: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     played_variant: Mapped[str] = mapped_column(String(16), nullable=False, default="base")
 
     battle: Mapped["Battle"] = relationship(back_populates="deck_cards")

@@ -130,13 +130,17 @@ BASE = "http://localhost:8000"
 cards = pd.read_json(f"{BASE}/api/data/cards")
 battles = pd.read_json(f"{BASE}/api/data/battles", params={"limit": 50000})
 players = pd.read_csv(f"{BASE}/api/data/players?format=csv")
-deck = pd.read_json(f"{BASE}/api/data/battle_deck_cards", params={"card_id": 26000000})
+deck = pd.read_json(f"{BASE}/api/data/battle_deck_cards?card_id=26000000")
+participants = pd.read_json(f"{BASE}/api/data/battle_participants")
+towers = pd.read_json(f"{BASE}/api/data/tower_troops")
+tower_stats = participants.merge(towers, left_on="tower_card_id", right_on="id", how="left")
+tower_stats.groupby("name")["won"].agg(["count", "mean"])
 ```
 
 常用参数：`format=csv`、`limit` / `offset` 分页、`meta=true` 返回带元数据的 JSON。
-表级 filter 见 `GET /api/data/tables`。
+表级 filter 见 `GET /api/data/tables`（含 `battle_participants?tower_card_id=`）。
 
-对战数据已入库（`battles`、`battle_deck_cards.played_variant` 等），**查询 API 尚未实现**，可暂时用 SQL 查看。
+对战数据已入库（`battles`、`battle_participants.tower_card_id`、`battle_deck_cards.played_variant` 等），**查询 API 尚未实现**，可暂时用 `/api/data` 或 SQL 查看。
 
 ---
 

@@ -4,7 +4,8 @@ from httpx import ASGITransport, AsyncClient
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db.models import Base, Battle, BattleDeckCard, Card, Player
+from app.data.tower_troop_seed import TOWER_TROOPS
+from app.db.models import Base, Battle, BattleDeckCard, BattleParticipant, Card, Player, TowerTroop
 from app.db.session import get_db
 from app.main import app
 
@@ -30,6 +31,7 @@ async def data_api_client():
                     card_type="troop",
                 )
             )
+            session.add_all([TowerTroop(**row) for row in TOWER_TROOPS])
             session.add(
                 Player(
                     tag="#PLAYER1",
@@ -47,12 +49,20 @@ async def data_api_client():
                 )
             )
             session.add(
+                BattleParticipant(
+                    battle_id=1,
+                    player_tag="#PLAYER1",
+                    side="team",
+                    won=True,
+                    tower_card_id=159000000,
+                )
+            )
+            session.add(
                 BattleDeckCard(
                     battle_id=1,
                     player_tag="#PLAYER1",
                     slot=0,
                     card_id=26000000,
-                    card_level=14,
                     played_variant="evo_1",
                 )
             )
@@ -75,6 +85,7 @@ async def test_list_data_tables(data_api_client: AsyncClient):
     names = {item["name"] for item in response.json()["tables"]}
     assert "cards" in names
     assert "battle_deck_cards" in names
+    assert "tower_troops" in names
 
 
 @pytest.mark.asyncio
@@ -88,6 +99,16 @@ async def test_export_table_json_records(data_api_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_export_tower_troops(data_api_client: AsyncClient):
+    response = await data_api_client.get("/api/data/tower_troops")
+    assert response.status_code == 200
+    rows = response.json()
+    assert len(rows) == 4
+    names = {row["name"] for row in rows}
+    assert names == {"Tower Princess", "Cannoneer", "Dagger Duchess", "Royal Chef"}
+
+
+@pytest.mark.asyncio
 async def test_export_table_json_with_meta(data_api_client: AsyncClient):
     response = await data_api_client.get("/api/data/battle_deck_cards", params={"meta": True})
     assert response.status_code == 200
@@ -95,6 +116,7 @@ async def test_export_table_json_with_meta(data_api_client: AsyncClient):
     assert payload["table"] == "battle_deck_cards"
     assert payload["count"] == 1
     assert payload["rows"][0]["played_variant"] == "evo_1"
+    assert "card_level" not in payload["rows"][0]
 
 
 @pytest.mark.asyncio
@@ -117,6 +139,19 @@ async def test_export_table_filter(data_api_client: AsyncClient):
     payload = response.json()
     assert payload["count"] == 1
     assert payload["filters"] == {"card_id": "26000000"}
+
+
+@pytest.mark.asyncio
+async def test_export_battle_participants_filter_by_tower(data_api_client: AsyncClient):
+    response = await data_api_client.get(
+        "/api/data/battle_participants",
+        params={"tower_card_id": 159000000, "meta": True},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["count"] == 1
+    assert payload["rows"][0]["tower_card_id"] == 159000000
+    assert payload["filters"] == {"tower_card_id": "159000000"}
 
 
 @pytest.mark.asyncio

@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.data.tower_troop_seed import KNOWN_TOWER_TROOP_IDS
 from app.db.models import Battle, BattleDeckCard, BattleParticipant, Player
 from app.schemas.leaderboard import BattlelogSyncResult
 from app.services.battle_mapper import (
@@ -228,6 +229,19 @@ class BattlelogSyncService:
         await session.flush()
 
         for participant in mapped["participants"]:
+            raw_tower_id = participant.get("tower_card_id")
+            tower_card_id: int | None = None
+            if raw_tower_id is not None:
+                if raw_tower_id in KNOWN_TOWER_TROOP_IDS:
+                    tower_card_id = raw_tower_id
+                else:
+                    logger.warning(
+                        "Unknown tower troop id %s for player %s in battle %s",
+                        raw_tower_id,
+                        participant["player_tag"],
+                        mapped["battle_key"],
+                    )
+
             session.add(
                 BattleParticipant(
                     battle_id=battle.id,
@@ -237,6 +251,7 @@ class BattlelogSyncService:
                     trophy_change=participant["trophy_change"],
                     crowns=participant["crowns"],
                     won=participant["won"],
+                    tower_card_id=tower_card_id,
                 )
             )
             for slot, card in enumerate(participant["cards"]):
@@ -247,7 +262,6 @@ class BattlelogSyncService:
                         player_tag=participant["player_tag"],
                         slot=slot,
                         card_id=card["id"],
-                        card_level=card.get("level"),
                         played_variant=played_variant,
                     )
                 )

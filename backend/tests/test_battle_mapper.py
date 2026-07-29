@@ -4,6 +4,7 @@ import pytest
 
 from app.services.battle_mapper import (
     build_battle_key,
+    extract_tower_card_id,
     map_battle_entry,
     parse_battle_time,
     should_include_battle,
@@ -43,6 +44,12 @@ def test_should_include_battle_path_of_legend():
     assert should_include_battle({"type": "PvP", "gameMode": {"name": "Ladder"}}, ranked_only=True) is False
 
 
+def test_extract_tower_card_id():
+    assert extract_tower_card_id({"supportCards": [{"id": 159000000, "name": "Tower Princess"}]}) == 159000000
+    assert extract_tower_card_id({"supportCards": []}) is None
+    assert extract_tower_card_id({}) is None
+
+
 def test_map_battle_entry():
     entry = {
         "type": "pathOfLegend",
@@ -56,6 +63,7 @@ def test_map_battle_entry():
                 "startingTrophies": 3160,
                 "trophyChange": 25,
                 "crowns": 3,
+                "supportCards": [{"id": 159000000, "name": "Tower Princess"}],
                 "cards": [{"id": 26000000, "level": 14}, {"id": 26000001, "level": 14}],
             }
         ],
@@ -65,6 +73,7 @@ def test_map_battle_entry():
                 "startingTrophies": 3150,
                 "trophyChange": -25,
                 "crowns": 1,
+                "supportCards": [{"id": 159000001, "name": "Cannoneer"}],
                 "cards": [{"id": 26000002, "level": 14}],
             }
         ],
@@ -74,4 +83,6 @@ def test_map_battle_entry():
     assert mapped["battle_type"] == "pathOfLegend"
     assert len(mapped["participants"]) == 2
     assert mapped["participants"][0]["won"] is True
+    assert mapped["participants"][0]["tower_card_id"] == 159000000
+    assert mapped["participants"][1]["tower_card_id"] == 159000001
     assert build_battle_key(mapped["battle_time"], "#G0CYJ00J", "#OPPONENT1") == mapped["battle_key"]

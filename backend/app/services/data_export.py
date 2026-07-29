@@ -22,6 +22,7 @@ from app.db.models import (
     LeaderboardSnapshot,
     Player,
     SyncRun,
+    TowerTroop,
 )
 
 TABLE_MODELS: dict[str, type[DeclarativeBase]] = {
@@ -35,11 +36,12 @@ TABLE_MODELS: dict[str, type[DeclarativeBase]] = {
     "battle_participants": BattleParticipant,
     "battle_deck_cards": BattleDeckCard,
     "sync_runs": SyncRun,
+    "tower_troops": TowerTroop,
 }
 
 TABLE_FILTERS: dict[str, tuple[str, ...]] = {
     "battles": ("battle_time_after", "synced_at_after"),
-    "battle_participants": ("battle_id", "player_tag"),
+    "battle_participants": ("battle_id", "player_tag", "tower_card_id"),
     "battle_deck_cards": ("battle_id", "player_tag", "card_id"),
     "leaderboard_entries": ("snapshot_id", "player_tag"),
     "card_changelog": ("card_id",),
@@ -119,6 +121,8 @@ def build_table_query(
             query = query.where(BattleParticipant.battle_id == int(filters["battle_id"]))
         if "player_tag" in filters:
             query = query.where(BattleParticipant.player_tag == filters["player_tag"])
+        if "tower_card_id" in filters:
+            query = query.where(BattleParticipant.tower_card_id == int(filters["tower_card_id"]))
     elif table == "battle_deck_cards":
         if "battle_id" in filters:
             query = query.where(BattleDeckCard.battle_id == int(filters["battle_id"]))
@@ -183,6 +187,8 @@ async def count_table_rows(db: AsyncSession, table: str, filters: dict[str, str]
             query = query.where(BattleParticipant.battle_id == int(filters["battle_id"]))
         if "player_tag" in filters:
             query = query.where(BattleParticipant.player_tag == filters["player_tag"])
+        if "tower_card_id" in filters:
+            query = query.where(BattleParticipant.tower_card_id == int(filters["tower_card_id"]))
     elif table == "battle_deck_cards":
         if "battle_id" in filters:
             query = query.where(BattleDeckCard.battle_id == int(filters["battle_id"]))

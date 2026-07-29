@@ -4,7 +4,8 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.db.models import Base, Card, LeaderboardEntry, LeaderboardSnapshot, Player, BattleDeckCard
+from app.data.tower_troop_seed import TOWER_TROOPS
+from app.db.models import Base, BattleParticipant, Card, LeaderboardEntry, LeaderboardSnapshot, Player, BattleDeckCard, TowerTroop
 from app.services.battlelog_sync import BattlelogSyncService
 from app.services.leaderboard_sync import LeaderboardSyncService
 
@@ -39,6 +40,7 @@ async def db_session():
                 card_type="troop",
             )
         )
+        session.add_all([TowerTroop(**row) for row in TOWER_TROOPS])
         await session.commit()
         yield session
 
@@ -218,6 +220,7 @@ async def test_battlelog_sync_creates_battle(db_session: AsyncSession):
                     "startingTrophies": 3160,
                     "trophyChange": 25,
                     "crowns": 3,
+                    "supportCards": [{"id": 159000000, "name": "Tower Princess"}],
                     "cards": [
                         {"id": 26000000, "level": 14},
                         {"id": 26000001, "level": 14},
@@ -230,6 +233,7 @@ async def test_battlelog_sync_creates_battle(db_session: AsyncSession):
                     "startingTrophies": 3150,
                     "trophyChange": -25,
                     "crowns": 1,
+                    "supportCards": [{"id": 159000001, "name": "Cannoneer"}],
                     "cards": [{"id": 26000000, "level": 14}],
                 }
             ],
@@ -242,6 +246,12 @@ async def test_battlelog_sync_creates_battle(db_session: AsyncSession):
     result = await service.sync_battlelog(db_session, opponent_expansion_rounds=0)
     assert result.battles_created == 1
     assert result.deck_cards_created == 3
+
+    participants = list((await db_session.execute(select(BattleParticipant))).scalars().all())
+    assert len(participants) == 2
+    by_tag = {p.player_tag: p for p in participants}
+    assert by_tag["#G0CYJ00J"].tower_card_id == 159000000
+    assert by_tag["#OPPONENT1"].tower_card_id == 159000001
 
     result_again = await service.sync_battlelog(db_session, opponent_expansion_rounds=0)
     assert result_again.battles_skipped == 1
