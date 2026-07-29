@@ -249,11 +249,28 @@ async def test_battlelog_sync_creates_battle(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_battlelog_sync_sets_played_variant_from_deck_slots(db_session: AsyncSession):
+async def test_battlelog_sync_sets_played_variant_from_evolution_level(db_session: AsyncSession):
+    knight = await db_session.get(Card, 26000000)
+    assert knight is not None
+    knight.max_evolution_level = 3
+    knight.has_evolution = True
+    knight.has_hero = True
+
+    for card in (
+        Card(id=26000015, name="Baby Dragon", elixir_cost=4, max_evolution_level=1, has_evolution=True, has_hero=False, card_type="troop"),
+        Card(id=28000015, name="Barbarian Barrel", elixir_cost=2, max_evolution_level=2, has_evolution=False, has_hero=True, card_type="spell"),
+        Card(id=28000000, name="Zap", elixir_cost=2, max_evolution_level=0, has_evolution=False, has_hero=False, card_type="spell"),
+        Card(id=28000010, name="Arrows", elixir_cost=3, max_evolution_level=0, has_evolution=False, has_hero=False, card_type="spell"),
+        Card(id=28000009, name="Giant Snowball", elixir_cost=2, max_evolution_level=0, has_evolution=False, has_hero=False, card_type="spell"),
+        Card(id=26000023, name="Golem", elixir_cost=8, max_evolution_level=0, has_evolution=False, has_hero=False, card_type="troop"),
+        Card(id=28000012, name="Rocket", elixir_cost=6, max_evolution_level=0, has_evolution=False, has_hero=False, card_type="spell"),
+        Card(id=27000009, name="Tombstone", elixir_cost=3, max_evolution_level=0, has_evolution=False, has_hero=False, card_type="building"),
+    ):
+        db_session.add(card)
     db_session.add(
         Player(
-            tag="#G0CYJ00J",
-            name="Nicoco23",
+            tag="#V9U9LQJ02",
+            name="Fireking",
             latest_rank=1,
             is_tracked=True,
             leaderboard_seeded=True,
@@ -262,14 +279,14 @@ async def test_battlelog_sync_sets_played_variant_from_deck_slots(db_session: As
     await db_session.commit()
 
     team_cards = [
-        {"id": 26000000, "level": 14},
-        {"id": 26000001, "level": 14},
-        {"id": 26000000, "level": 14},
-        {"id": 26000001, "level": 14},
-        {"id": 26000000, "level": 14},
-        {"id": 26000001, "level": 14},
-        {"id": 26000000, "level": 14},
-        {"id": 26000001, "level": 14},
+        {"id": 26000015, "level": 6, "evolutionLevel": 1},
+        {"id": 28000015, "level": 6, "evolutionLevel": 2},
+        {"id": 26000000, "level": 11, "evolutionLevel": 1},
+        {"id": 28000010, "level": 11},
+        {"id": 28000009, "level": 11},
+        {"id": 26000023, "level": 6},
+        {"id": 28000012, "level": 11},
+        {"id": 27000009, "level": 11},
     ]
     battlelog = [
         {
@@ -279,7 +296,7 @@ async def test_battlelog_sync_sets_played_variant_from_deck_slots(db_session: As
             "arena": {"id": 54000016, "name": "Legend Arena"},
             "team": [
                 {
-                    "tag": "#G0CYJ00J",
+                    "tag": "#V9U9LQJ02",
                     "startingTrophies": 3160,
                     "trophyChange": 25,
                     "crowns": 3,
@@ -303,15 +320,13 @@ async def test_battlelog_sync_sets_played_variant_from_deck_slots(db_session: As
     await service.sync_battlelog(db_session, opponent_expansion_rounds=0)
 
     result = await db_session.execute(
-        select(BattleDeckCard).where(
-            BattleDeckCard.player_tag == "#G0CYJ00J",
-            BattleDeckCard.slot.in_([0, 1, 2]),
-        )
+        select(BattleDeckCard).where(BattleDeckCard.player_tag == "#V9U9LQJ02")
     )
     deck_cards = {(row.slot, row.played_variant) for row in result.scalars()}
     assert (0, "evo_1") in deck_cards
     assert (1, "hero") in deck_cards
     assert (2, "evo_1") in deck_cards
+    assert (3, "base") in deck_cards
 
 
 def _make_battle(team_tag: str, opponent_tag: str, battle_time: str = "20250726T120000.000Z") -> dict:

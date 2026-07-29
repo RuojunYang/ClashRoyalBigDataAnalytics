@@ -141,14 +141,19 @@ Round 2: opponents from round-1 battles → fetch their last N battles
 
 - L1 `cards.card_type` — official API fact: `troop` / `building` / `spell` (unchanged)
 - L2 `card_gameplay_profiles.variant` — `base` / `hero` / `evo_1` / … per-form core flag
-- L3 `battle_deck_cards.played_variant` — inferred at ingest from deck slot + card facts
+- L3 `battle_deck_cards.played_variant` — from battlelog deck card `evolutionLevel` (1=evo, 2=hero)
 
 **Variant inference** (battlelog sync, `app/services/card_variant.py`):
 
-- Slots in `DECK_EVO_SLOTS` (default `0,2`) + `cards.has_evolution` → `evo_N`
-- Slot `DECK_HERO_SLOT` (default `1`) + `cards.has_hero` → `hero`
-- Otherwise → `base`
-- Optional API `evolutionLevel` on deck card objects overrides evo level when present
+- `evolutionLevel == 1` → `evo_1`
+- `evolutionLevel == 2` → `hero`
+- otherwise → `base`
+- Independent of deck slot index (Wild slot can be either evo or hero per card)
+
+**Card capabilities** (card sync, `app/services/card_mapper.py`):
+
+- `maxEvolutionLevel` bitmask on `/cards`: `1`=evo, `2`=hero, `3`=both, `0`=neither
+- `has_evolution = max & 1`, `has_hero = max & 2`
 
 Seed data: [`backend/app/data/card_profile_seed.py`](backend/app/data/card_profile_seed.py)
 
@@ -321,8 +326,6 @@ All settings in `backend/.env` (see `.env.example`). Loaded by `app/config.py` v
 | `OPPONENT_EXPANSION_ROUNDS` | `2` | BFS rounds to follow opponents |
 | `SYNC_RANKED_BATTLES_ONLY` | `true` | Filter battlelog battle types |
 | `BATTLELOG_BATCH_SIZE` | `10` | Reserved for future scheduled batches |
-| `DECK_EVO_SLOTS` | `0,2` | Deck slots that map to evolution form when `has_evolution` |
-| `DECK_HERO_SLOT` | `1` | Deck slot that maps to hero form when `has_hero` |
 | `SYNC_ON_STARTUP` | `false` | Run card sync on app start |
 | `CARD_SYNC_CRON_HOUR` | `3` | Daily card sync hour (UTC) |
 

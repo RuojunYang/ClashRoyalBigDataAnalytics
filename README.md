@@ -154,8 +154,6 @@ deck = pd.read_json(f"{BASE}/api/data/battle_deck_cards", params={"card_id": 260
 | `UNTRACK_AFTER_MISSES` | 连续几次不在榜后 untrack | `3` |
 | `BATTLES_PER_PLAYER` | 每人每次 sync 入库最近几场 ranked 对局 | `25` |
 | `OPPONENT_EXPANSION_ROUNDS` | 对手扩展 BFS 轮数（0=仅种子玩家） | `2` |
-| `DECK_EVO_SLOTS` | 进化形态 deck 槽位（逗号分隔） | `0,2` |
-| `DECK_HERO_SLOT` | 英雄形态 deck 槽位 | `1` |
 | `SYNC_RANKED_BATTLES_ONLY` | 只入库 PoL / Ranked1v1 | `true` |
 | `SYNC_ON_STARTUP` | 启动时同步卡牌 | `false` |
 | `CARD_SYNC_CRON_HOUR` | 每日卡牌同步（UTC 小时） | `3` |

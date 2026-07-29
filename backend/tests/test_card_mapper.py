@@ -1,12 +1,19 @@
 import pytest
 
-from app.services.card_mapper import infer_card_type, map_api_card
+from app.services.card_mapper import infer_card_capabilities, infer_card_type, map_api_card
 
 
 def test_infer_card_type():
     assert infer_card_type(26000000) == "troop"
     assert infer_card_type(27000000) == "building"
     assert infer_card_type(28000004) == "spell"
+
+
+def test_infer_card_capabilities_bitmask():
+    assert infer_card_capabilities(0) == (False, False)
+    assert infer_card_capabilities(1) == (True, False)
+    assert infer_card_capabilities(2) == (False, True)
+    assert infer_card_capabilities(3) == (True, True)
 
 
 def test_map_api_card_ignores_rarity_and_max_level():
@@ -36,47 +43,69 @@ def test_map_api_card_ignores_rarity_and_max_level():
     assert "max_level" not in mapped
 
 
-def test_map_api_card_detects_hero():
-    api_card = {
-        "name": "Knight",
-        "id": 26000000,
-        "iconUrls": {
-            "medium": "https://example.com/medium.png",
-            "heroMedium": "https://example.com/hero.png",
-        },
-    }
-
-    mapped = map_api_card(api_card)
+def test_map_api_card_knight_max_three_has_both():
+    mapped = map_api_card(
+        {
+            "name": "Knight",
+            "id": 26000000,
+            "maxEvolutionLevel": 3,
+            "iconUrls": {
+                "medium": "https://example.com/medium.png",
+                "heroMedium": "https://example.com/hero.png",
+                "evolutionMedium": "https://example.com/evolution.png",
+            },
+        }
+    )
+    assert mapped["has_evolution"] is True
     assert mapped["has_hero"] is True
 
 
-def test_map_api_card_has_evolution_only_from_evolution_medium():
-    api_card = {
-        "name": "Ice Golem",
-        "id": 26000038,
-        "maxEvolutionLevel": 2,
-        "elixirCost": 2,
-        "iconUrls": {
-            "medium": "https://example.com/medium.png",
-            "heroMedium": "https://example.com/hero.png",
-        },
-    }
+def test_map_api_card_baby_dragon_evo_only():
+    mapped = map_api_card(
+        {
+            "name": "Baby Dragon",
+            "id": 26000015,
+            "maxEvolutionLevel": 1,
+            "iconUrls": {
+                "medium": "https://example.com/medium.png",
+                "evolutionMedium": "https://example.com/evolution.png",
+            },
+        }
+    )
+    assert mapped["has_evolution"] is True
+    assert mapped["has_hero"] is False
 
-    mapped = map_api_card(api_card)
+
+def test_map_api_card_barbarian_barrel_hero_only():
+    mapped = map_api_card(
+        {
+            "name": "Barbarian Barrel",
+            "id": 28000015,
+            "maxEvolutionLevel": 2,
+            "iconUrls": {
+                "medium": "https://example.com/medium.png",
+                "heroMedium": "https://example.com/hero.png",
+            },
+        }
+    )
+    assert mapped["has_evolution"] is False
+    assert mapped["has_hero"] is True
+
+
+def test_map_api_card_ice_golem_hero_only_from_max_level():
+    mapped = map_api_card(
+        {
+            "name": "Ice Golem",
+            "id": 26000038,
+            "maxEvolutionLevel": 2,
+            "elixirCost": 2,
+            "iconUrls": {
+                "medium": "https://example.com/medium.png",
+                "heroMedium": "https://example.com/hero.png",
+            },
+        }
+    )
 
     assert mapped["has_evolution"] is False
     assert mapped["has_hero"] is True
     assert mapped["max_evolution_level"] == 2
-
-
-def test_map_api_card_max_evolution_level_without_icon_is_not_evo():
-    api_card = {
-        "name": "Some Card",
-        "id": 26000099,
-        "maxEvolutionLevel": 1,
-        "iconUrls": {"medium": "https://example.com/medium.png"},
-    }
-
-    mapped = map_api_card(api_card)
-
-    assert mapped["has_evolution"] is False

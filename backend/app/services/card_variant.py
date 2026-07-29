@@ -1,28 +1,7 @@
-from app.db.models import Card
-
-
-def parse_deck_slot_set(raw: str) -> frozenset[int]:
-    return frozenset(int(part.strip()) for part in raw.split(",") if part.strip())
-
-
-def infer_played_variant(
-    slot: int,
-    card: Card | None,
-    *,
-    evo_slots: frozenset[int],
-    hero_slot: int,
-    evolution_level_from_api: int | None = None,
-) -> str:
-    if card is None:
-        return "base"
-
-    if slot == hero_slot and card.has_hero:
+def infer_played_variant(evolution_level_from_api: int | None) -> str:
+    """Map battlelog deck card evolutionLevel: 1=evo, 2=hero, else base."""
+    if evolution_level_from_api == 2:
         return "hero"
-
-    if slot in evo_slots and card.has_evolution:
-        level = evolution_level_from_api
-        if level is None or level < 1:
-            level = 1
-        return f"evo_{level}"
-
+    if evolution_level_from_api == 1:
+        return "evo_1"
     return "base"
