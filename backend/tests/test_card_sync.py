@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.db.models import Base, Card, CardChangelog
+from app.db.models import Base, Card, CardChangelog, CardGameplayProfile
 from app.services.card_sync import CardSyncService
 
 
@@ -119,3 +119,23 @@ async def test_sync_cards_deactivates_missing_card(db_session: AsyncSession):
     assert archers is not None
     assert archers.is_active is True
     assert result.cards_deactivated == 1
+
+
+@pytest.mark.asyncio
+async def test_sync_cards_seeds_curated_profiles_when_cards_exist(db_session: AsyncSession):
+    client = AsyncMock()
+    client.get_cards = AsyncMock(
+        return_value=[
+            {"name": "Giant", "id": 26000003, "elixirCost": 5, "maxEvolutionLevel": 0, "iconUrls": {"medium": "x"}},
+            {"name": "Goblin Barrel", "id": 28000004, "elixirCost": 3, "maxEvolutionLevel": 1, "iconUrls": {"medium": "y"}},
+        ]
+    )
+    service = CardSyncService(client=client)
+
+    await service.sync_cards(db_session)
+
+    profiles = list((await db_session.execute(select(CardGameplayProfile))).scalars().all())
+    assert len(profiles) >= 2
+    giant = await db_session.get(CardGameplayProfile, (26000003, "base"))
+    assert giant is not None
+    assert giant.is_core is True

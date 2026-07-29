@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import Card, CardChangelog, SyncRun
 from app.schemas.card import CardSyncResult
 from app.services.card_mapper import map_api_card
+from app.services.card_profile_seed_service import ensure_curated_profiles
 from app.services.clash_api import ClashRoyaleClient
 
 logger = logging.getLogger(__name__)
@@ -130,6 +131,8 @@ class CardSyncService:
             )
             total_active_cards = total_active_result.scalar_one()
 
+            profiles_seeded = await ensure_curated_profiles(session)
+
             sync_run.status = "success"
             sync_run.finished_at = datetime.now(UTC)
             sync_run.cards_created = created
@@ -140,11 +143,12 @@ class CardSyncService:
             await session.commit()
 
             logger.info(
-                "Card sync complete: created=%d updated=%d deactivated=%d changes=%d",
+                "Card sync complete: created=%d updated=%d deactivated=%d changes=%d profiles_seeded=%d",
                 created,
                 updated,
                 deactivated,
                 changes_logged,
+                profiles_seeded,
             )
 
             return CardSyncResult(

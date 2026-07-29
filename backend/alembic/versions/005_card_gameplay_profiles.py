@@ -50,17 +50,7 @@ def upgrade() -> None:
         sa.column("label", sa.String),
         sa.column("description", sa.Text),
     )
-    profiles_table = sa.table(
-        "card_gameplay_profiles",
-        sa.column("card_id", sa.BigInteger),
-        sa.column("variant", sa.String),
-        sa.column("role_code", sa.String),
-        sa.column("is_core", sa.Boolean),
-        sa.column("related_card_id", sa.BigInteger),
-        sa.column("notes", sa.Text),
-    )
 
-    # Inline seed data — migrations must not import app modules that change later.
     card_threat_roles = [
         {
             "code": "tower_tank",
@@ -98,43 +88,8 @@ def upgrade() -> None:
             "description": "Spell that supports a push but is not the deck core on its own.",
         },
     ]
-    card_gameplay_profiles = [
-        {"card_id": 26000003, "variant": "base", "role_code": "tower_tank", "is_core": True, "notes": "Giant"},
-        {"card_id": 26000009, "variant": "base", "role_code": "tower_tank", "is_core": True, "notes": "Golem"},
-        {"card_id": 26000038, "variant": "base", "role_code": "support_tank", "is_core": False, "notes": "Ice Golem"},
-        {"card_id": 26000021, "variant": "base", "role_code": "building_target", "is_core": True, "notes": "Hog Rider"},
-        {"card_id": 27000009, "variant": "base", "role_code": "spawner", "is_core": False, "notes": "Tombstone"},
-        {
-            "card_id": 27000009,
-            "variant": "hero",
-            "role_code": "summoned_threat",
-            "is_core": True,
-            "notes": "Tombstone Hero form summons a major threat",
-        },
-        {
-            "card_id": 28000004,
-            "variant": "base",
-            "role_code": "spell_win_condition",
-            "is_core": True,
-            "notes": "Goblin Barrel — spell win condition",
-        },
-    ]
 
     op.bulk_insert(roles_table, card_threat_roles)
-    op.bulk_insert(
-        profiles_table,
-        [
-            {
-                "card_id": row["card_id"],
-                "variant": row["variant"],
-                "role_code": row["role_code"],
-                "is_core": row["is_core"],
-                "related_card_id": row.get("related_card_id"),
-                "notes": row.get("notes"),
-            }
-            for row in card_gameplay_profiles
-        ],
-    )
 
 
 def downgrade() -> None:
