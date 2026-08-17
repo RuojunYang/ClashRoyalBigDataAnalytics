@@ -49,6 +49,7 @@ class SyncRunResponse(BaseModel):
 
 
 class CardSyncResult(BaseModel):
+    operation_run_id: int
     sync_run_id: int
     sync_batch_id: UUID
     cards_created: int = 0

@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     opponent_expansion_rounds: int = 2
     sync_ranked_battles_only: bool = True
     battlelog_batch_size: int = 10
+    operation_log_dir: str = "logs"
+    operation_progress_every_n: int = 10
+    operation_progress_interval_seconds: float = 30.0
 
 
 settings = Settings()

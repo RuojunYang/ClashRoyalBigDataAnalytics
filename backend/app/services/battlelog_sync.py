@@ -14,8 +14,9 @@ from app.services.battle_mapper import (
     map_battle_entry,
     should_include_battle,
 )
-from app.services.clash_api import ClashRoyaleClient
 from app.services.card_variant import infer_played_variant
+from app.services.clash_api import ClashRoyaleClient
+from app.services.operation_run_tracker import OperationRunTracker
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,8 @@ class BattlelogSyncService:
         opponent_expansion_rounds = (
             settings.opponent_expansion_rounds if opponent_expansion_rounds is None else opponent_expansion_rounds
         )
+        if batch_size is None:
+            batch_size = settings.battlelog_batch_size
 
         seed_result = await session.execute(
             select(Player)
@@ -57,63 +60,120 @@ class BattlelogSyncService:
             .order_by(Player.latest_rank.nulls_last(), Player.tag)
         )
         seed_players = list(seed_result.scalars().all())
-        if batch_size is not None:
+        if batch_size is not None and batch_size > 0:
             seed_players = seed_players[:batch_size]
+
+        params = {
+            "battles_per_player": battles_per_player,
+            "opponent_expansion_rounds": opponent_expansion_rounds,
+            "batch_size": batch_size if batch_size and batch_size > 0 else None,
+            "sync_ranked_battles_only": settings.sync_ranked_battles_only,
+            "leaderboard_top_n": settings.leaderboard_top_n,
+            "seed_player_count": len(seed_players),
+        }
+
+        tracker = OperationRunTracker(session, "battlelog", params)
+        await tracker.start()
+        await session.commit()
 
         stats = _SyncStats()
         processed_tags: set[str] = set()
         current_frontier = [player.tag for player in seed_players]
 
-        for round_index in range(opponent_expansion_rounds + 1):
-            next_frontier: set[str] = set()
-            is_expansion_round = round_index > 0
+        try:
+            for round_index in range(opponent_expansion_rounds + 1):
+                next_frontier: set[str] = set()
+                is_expansion_round = round_index > 0
 
-            for player_tag in current_frontier:
-                if player_tag in processed_tags:
-                    continue
+                for player_tag in current_frontier:
+                    if player_tag in processed_tags:
+                        continue
 
-                player_result = await self._sync_player_battlelog(
-                    session,
-                    player_tag=player_tag,
-                    battles_per_player=battles_per_player,
-                    now=now,
-                    stats=stats,
-                    is_expansion_player=is_expansion_round,
+                    player_result = await self._sync_player_battlelog(
+                        session,
+                        player_tag=player_tag,
+                        battles_per_player=battles_per_player,
+                        now=now,
+                        stats=stats,
+                        is_expansion_player=is_expansion_round,
+                    )
+                    processed_tags.add(player_tag)
+                    next_frontier.update(player_result.opponent_tags)
+
+                    await tracker.maybe_update_progress(
+                        {
+                            "round": round_index,
+                            "round_type": "expansion" if is_expansion_round else "seed",
+                            "players_processed": stats.players_processed,
+                            "battles_created": stats.battles_created,
+                            "battles_skipped": stats.battles_skipped,
+                            "deck_cards_created": stats.deck_cards_created,
+                            "opponents_discovered": stats.opponents_discovered,
+                            "current_player_tag": player_tag,
+                        },
+                        commit=True,
+                    )
+
+                if round_index >= opponent_expansion_rounds:
+                    break
+
+                current_frontier = sorted(next_frontier - processed_tags)
+                logger.info(
+                    "Battlelog expansion round %d complete: next_frontier=%d",
+                    round_index + 1,
+                    len(current_frontier),
                 )
-                processed_tags.add(player_tag)
-                next_frontier.update(player_result.opponent_tags)
+                await tracker.maybe_update_progress(
+                    {
+                        "round": round_index,
+                        "round_complete": True,
+                        "next_frontier_size": len(current_frontier),
+                        "players_processed": stats.players_processed,
+                        "battles_created": stats.battles_created,
+                        "battles_skipped": stats.battles_skipped,
+                        "opponents_discovered": stats.opponents_discovered,
+                    },
+                    force=True,
+                    commit=True,
+                )
 
-            if round_index >= opponent_expansion_rounds:
-                break
+            result = {
+                "players_processed": stats.players_processed,
+                "battles_created": stats.battles_created,
+                "battles_skipped": stats.battles_skipped,
+                "deck_cards_created": stats.deck_cards_created,
+                "total_tracked": len(seed_players),
+                "opponents_discovered": stats.opponents_discovered,
+                "expansion_rounds_run": opponent_expansion_rounds,
+                "battles_per_player": battles_per_player,
+            }
+            await tracker.finish("success", result, commit=True)
 
-            current_frontier = sorted(next_frontier - processed_tags)
             logger.info(
-                "Battlelog expansion round %d complete: next_frontier=%d",
-                round_index + 1,
-                len(current_frontier),
+                "Battlelog sync complete: players=%d battles_created=%d skipped=%d deck_cards=%d opponents=%d",
+                stats.players_processed,
+                stats.battles_created,
+                stats.battles_skipped,
+                stats.deck_cards_created,
+                stats.opponents_discovered,
             )
 
-        await session.commit()
-
-        logger.info(
-            "Battlelog sync complete: players=%d battles_created=%d skipped=%d deck_cards=%d opponents=%d",
-            stats.players_processed,
-            stats.battles_created,
-            stats.battles_skipped,
-            stats.deck_cards_created,
-            stats.opponents_discovered,
-        )
-
-        return BattlelogSyncResult(
-            players_processed=stats.players_processed,
-            battles_created=stats.battles_created,
-            battles_skipped=stats.battles_skipped,
-            deck_cards_created=stats.deck_cards_created,
-            total_tracked=len(seed_players),
-            opponents_discovered=stats.opponents_discovered,
-            expansion_rounds_run=opponent_expansion_rounds,
-            battles_per_player=battles_per_player,
-        )
+            return BattlelogSyncResult(
+                operation_run_id=tracker.run_id,
+                players_processed=stats.players_processed,
+                battles_created=stats.battles_created,
+                battles_skipped=stats.battles_skipped,
+                deck_cards_created=stats.deck_cards_created,
+                total_tracked=len(seed_players),
+                opponents_discovered=stats.opponents_discovered,
+                expansion_rounds_run=opponent_expansion_rounds,
+                battles_per_player=battles_per_player,
+            )
+        except Exception as exc:
+            logger.exception("Battlelog sync failed")
+            await session.rollback()
+            await tracker.fail(str(exc), commit=True)
+            raise
 
     async def _sync_player_battlelog(
         self,

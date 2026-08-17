@@ -5,11 +5,13 @@ from fastapi import FastAPI
 
 from app.api import admin, cards, data, players
 from app.config import settings
+from app.logging.daily_file import setup_sync_file_logging
 from app.db.session import async_session_factory
 from app.scheduler import start_scheduler, stop_scheduler
 from app.services.card_sync import CardSyncService
 
 logging.basicConfig(level=logging.INFO)
+setup_sync_file_logging(settings.operation_log_dir)
 logger = logging.getLogger(__name__)
 
 

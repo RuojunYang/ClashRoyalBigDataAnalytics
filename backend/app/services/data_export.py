@@ -20,6 +20,7 @@ from app.db.models import (
     CardGameplayProfile,
     LeaderboardEntry,
     LeaderboardSnapshot,
+    OperationRun,
     Player,
     SyncRun,
     TowerTroop,
@@ -36,6 +37,7 @@ TABLE_MODELS: dict[str, type[DeclarativeBase]] = {
     "battle_participants": BattleParticipant,
     "battle_deck_cards": BattleDeckCard,
     "sync_runs": SyncRun,
+    "operation_runs": OperationRun,
     "tower_troops": TowerTroop,
 }
 
@@ -47,6 +49,7 @@ TABLE_FILTERS: dict[str, tuple[str, ...]] = {
     "card_changelog": ("card_id",),
     "card_gameplay_profiles": ("card_id", "is_core"),
     "players": ("is_tracked", "leaderboard_seeded"),
+    "operation_runs": ("operation", "status"),
 }
 
 
@@ -148,6 +151,11 @@ def build_table_query(
             query = _apply_bool_filter(query, Player.is_tracked, filters["is_tracked"])
         if "leaderboard_seeded" in filters:
             query = _apply_bool_filter(query, Player.leaderboard_seeded, filters["leaderboard_seeded"])
+    elif table == "operation_runs":
+        if "operation" in filters:
+            query = query.where(OperationRun.operation == filters["operation"])
+        if "status" in filters:
+            query = query.where(OperationRun.status == filters["status"])
 
     pk_names = [column.key for column in sa_inspect(model).primary_key]
     order_columns = [getattr(model, name) for name in pk_names]
@@ -214,6 +222,11 @@ async def count_table_rows(db: AsyncSession, table: str, filters: dict[str, str]
             query = _apply_bool_filter(query, Player.is_tracked, filters["is_tracked"])
         if "leaderboard_seeded" in filters:
             query = _apply_bool_filter(query, Player.leaderboard_seeded, filters["leaderboard_seeded"])
+    elif table == "operation_runs":
+        if "operation" in filters:
+            query = query.where(OperationRun.operation == filters["operation"])
+        if "status" in filters:
+            query = query.where(OperationRun.status == filters["status"])
 
     result = await db.execute(query)
     return int(result.scalar_one())

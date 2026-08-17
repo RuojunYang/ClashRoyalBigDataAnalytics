@@ -11,6 +11,7 @@ from app.schemas.card import CardSyncResult
 from app.services.card_mapper import map_api_card
 from app.services.card_profile_seed_service import ensure_curated_profiles
 from app.services.clash_api import ClashRoyaleClient
+from app.services.operation_run_tracker import OperationRunTracker
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,11 @@ class CardSyncService:
         sync_run = SyncRun(sync_type="cards", status="running", sync_batch_id=sync_batch_id)
         session.add(sync_run)
         await session.flush()
+        sync_run_id = sync_run.id
+
+        tracker = OperationRunTracker(session, "cards", {"sync_batch_id": str(sync_batch_id)})
+        await tracker.start()
+        await session.commit()
 
         try:
             api_cards = await self.client.get_cards()
@@ -57,6 +63,11 @@ class CardSyncService:
             created = 0
             updated = 0
             changes_logged = 0
+
+            await tracker.maybe_update_progress(
+                {"items_processed": len(mapped_cards), "phase": "fetched"},
+                force=True,
+            )
 
             for mapped in mapped_cards:
                 card_id = mapped["id"]
@@ -140,6 +151,17 @@ class CardSyncService:
             sync_run.cards_deactivated = deactivated
             sync_run.changes_logged = changes_logged
 
+            result = {
+                "sync_run_id": sync_run.id,
+                "sync_batch_id": str(sync_batch_id),
+                "cards_created": created,
+                "cards_updated": updated,
+                "cards_deactivated": deactivated,
+                "changes_logged": changes_logged,
+                "total_active_cards": total_active_cards,
+                "profiles_seeded": profiles_seeded,
+            }
+            await tracker.finish("success", result, commit=False)
             await session.commit()
 
             logger.info(
@@ -152,6 +174,7 @@ class CardSyncService:
             )
 
             return CardSyncResult(
+                operation_run_id=tracker.run_id,
                 sync_run_id=sync_run.id,
                 sync_batch_id=sync_batch_id,
                 cards_created=created,
@@ -163,13 +186,10 @@ class CardSyncService:
         except Exception as exc:
             logger.exception("Card sync failed")
             await session.rollback()
-            failed_run = SyncRun(
-                sync_type="cards",
-                status="failed",
-                finished_at=datetime.now(UTC),
-                error_message=str(exc),
-                sync_batch_id=sync_batch_id,
-            )
-            session.add(failed_run)
-            await session.commit()
+            sync_run_row = await session.get(SyncRun, sync_run_id)
+            if sync_run_row is not None:
+                sync_run_row.status = "failed"
+                sync_run_row.finished_at = datetime.now(UTC)
+                sync_run_row.error_message = str(exc)
+            await tracker.fail(str(exc), commit=True)
             raise

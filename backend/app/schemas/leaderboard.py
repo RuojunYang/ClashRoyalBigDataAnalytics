@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class LeaderboardSyncResult(BaseModel):
+    operation_run_id: int
     snapshot_id: int
     top_n: int
     entries_synced: int
@@ -11,6 +12,7 @@ class LeaderboardSyncResult(BaseModel):
 
 
 class BattlelogSyncResult(BaseModel):
+    operation_run_id: int
     players_processed: int
     battles_created: int
     battles_skipped: int
